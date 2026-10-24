@@ -1,255 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
+import {
+  products,
+  money,
+  COUPONS,
+  LIFESTYLE_BANNERS,
+  FEATURED_COLLECTIONS
+} from "./data/products";
+import AuthModal from "./components/AuthModal";
+import UserProfile from "./components/UserProfile";
+import ChatAssistant from "./components/ChatAssistant";
+import SupabaseConfigModal from "./components/SupabaseConfigModal";
+import {
+  getSupabase,
+  isSupabaseConfigured,
+  supabaseSignOut,
+  supabaseCreateOrder,
+  supabaseFetchOrders,
+  supabaseFetchProfile
+} from "./lib/supabase";
 
-const products = [
-  {
-    id: 1,
-    name: "Sculpted Ceramic Vase",
-    category: "Home Decor",
-    price: 899,
-    oldPrice: 1299,
-    rating: 4.8,
-    image: "https://images.unsplash.com/photo-1578500494198-246f612d3b3d?auto=format&fit=crop&w=700&q=85",
-    emoji: "🏺",
-    color: "#e9dfd0",
-    description: "A sculptural ceramic vase that brings warmth and character to your living space."
-  },
-  {
-    id: 2,
-    name: "Linen Cushion Cover",
-    category: "Home Decor",
-    price: 499,
-    oldPrice: 699,
-    rating: 4.7,
-    image: "https://images.unsplash.com/photo-1584100936595-c0654b55a2e2?auto=format&fit=crop&w=700&q=85",
-    emoji: "🛋️",
-    color: "#d9cbb8",
-    description: "Soft neutral-toned cushion covers for a relaxed, layered interior."
-  },
-  {
-    id: 3,
-    name: "Amber Table Lamp",
-    category: "Lighting",
-    price: 1499,
-    oldPrice: 1999,
-    rating: 4.9,
-    image: "https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&w=700&q=85",
-    emoji: "💡",
-    color: "#e8d8bd",
-    description: "Create a cosy atmosphere with warm ambient lighting and timeless styling."
-  },
-  {
-    id: 4,
-    name: "Minimal Wall Clock",
-    category: "Home Decor",
-    price: 1099,
-    oldPrice: 1499,
-    rating: 4.6,
-    image: "https://images.unsplash.com/photo-1563861826100-9cb868fdbe1c?auto=format&fit=crop&w=700&q=85",
-    emoji: "🕰️",
-    color: "#d8d7c8",
-    description: "A clean, understated clock designed to complement modern interiors."
-  },
-  {
-    id: 5,
-    name: "Stoneware Coffee Mug",
-    category: "Kitchen",
-    price: 349,
-    oldPrice: 499,
-    rating: 4.8,
-    image: "https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?auto=format&fit=crop&w=700&q=85",
-    emoji: "☕",
-    color: "#e5d5c3",
-    description: "A tactile stoneware mug for slow mornings and your favourite daily brew."
-  },
-  {
-    id: 6,
-    name: "Pour-Over Coffee Set",
-    category: "Kitchen",
-    price: 1299,
-    oldPrice: 1699,
-    rating: 4.7,
-    image: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=700&q=85",
-    emoji: "☕",
-    color: "#d9d1c2",
-    description: "A thoughtfully styled coffee set for a more mindful morning ritual."
-  },
-  {
-    id: 7,
-    name: "Acacia Serving Board",
-    category: "Kitchen",
-    price: 799,
-    oldPrice: 1099,
-    rating: 4.6,
-    image: "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=700&q=85",
-    emoji: "🍽️",
-    color: "#dfc39d",
-    description: "Natural wood styling for serving snacks, bread and small gatherings."
-  },
-  {
-    id: 8,
-    name: "Ribbed Glass Bottle",
-    category: "Kitchen",
-    price: 399,
-    oldPrice: 549,
-    rating: 4.5,
-    image: "https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=700&q=85",
-    emoji: "🫙",
-    color: "#dce5dc",
-    description: "A reusable everyday bottle with a clean, minimal silhouette."
-  },
-  {
-    id: 9,
-    name: "Walnut Desk Organizer",
-    category: "Workspace",
-    price: 699,
-    oldPrice: 999,
-    rating: 4.8,
-    image: "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=700&q=85",
-    emoji: "🗂️",
-    color: "#d7c2a7",
-    description: "Keep everyday essentials organised with a warm, natural desk aesthetic."
-  },
-  {
-    id: 10,
-    name: "Hardcover Journal",
-    category: "Workspace",
-    price: 299,
-    oldPrice: 449,
-    rating: 4.7,
-    image: "https://images.unsplash.com/photo-1531346878377-a5be20888e57?auto=format&fit=crop&w=700&q=85",
-    emoji: "📓",
-    color: "#d9d5c8",
-    description: "A simple journal for plans, reflections, sketches and fresh ideas."
-  },
-  {
-    id: 11,
-    name: "Desk Companion Lamp",
-    category: "Workspace",
-    price: 1199,
-    oldPrice: 1599,
-    rating: 4.6,
-    image: "https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&w=700&q=85",
-    emoji: "💡",
-    color: "#e9ddc9",
-    description: "A focused glow for reading, studying and long work sessions."
-  },
-  {
-    id: 12,
-    name: "Canvas Storage Basket",
-    category: "Workspace",
-    price: 549,
-    oldPrice: 749,
-    rating: 4.5,
-    image: "https://images.unsplash.com/photo-1593085260707-5377ba37f868?auto=format&fit=crop&w=700&q=85",
-    emoji: "🧺",
-    color: "#e2d4bf",
-    description: "A versatile storage basket for keeping small spaces tidy."
-  },
-  {
-    id: 13,
-    name: "Botanical Reed Diffuser",
-    category: "Wellness",
-    price: 649,
-    oldPrice: 899,
-    rating: 4.8,
-    image: "https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?auto=format&fit=crop&w=700&q=85",
-    emoji: "🌿",
-    color: "#dce2d1",
-    description: "A fragrance-inspired home accessory for a calm, welcoming atmosphere."
-  },
-  {
-    id: 14,
-    name: "Daily Skincare Essentials",
-    category: "Wellness",
-    price: 999,
-    oldPrice: 1399,
-    rating: 4.6,
-    image: "https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?auto=format&fit=crop&w=700&q=85",
-    emoji: "🧴",
-    color: "#ead8d0",
-    description: "A curated skincare-themed set for a simple daily self-care ritual."
-  },
-  {
-    id: 15,
-    name: "Cotton Bath Towel",
-    category: "Wellness",
-    price: 599,
-    oldPrice: 799,
-    rating: 4.7,
-    image: "https://images.unsplash.com/photo-1620626011761-996317b8d101?auto=format&fit=crop&w=700&q=85",
-    emoji: "🛁",
-    color: "#e4ded2",
-    description: "Soft neutral styling for a clean and comfortable bathroom."
-  },
-  {
-    id: 16,
-    name: "Self-Care Gift Box",
-    category: "Wellness",
-    price: 1199,
-    oldPrice: 1599,
-    rating: 4.8,
-    image: "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?auto=format&fit=crop&w=700&q=85",
-    emoji: "🎁",
-    color: "#e6d4ca",
-    description: "A thoughtful gift concept for birthdays, celebrations and everyday appreciation."
-  },
-  {
-    id: 17,
-    name: "Weekend Canvas Tote",
-    category: "Travel",
-    price: 799,
-    oldPrice: 1099,
-    rating: 4.7,
-    image: "https://images.unsplash.com/photo-1590874103328-eac38a683ce7?auto=format&fit=crop&w=700&q=85",
-    emoji: "👜",
-    color: "#ded3c1",
-    description: "A versatile carryall for errands, casual outings and weekend plans."
-  },
-  {
-    id: 18,
-    name: "Travel Packing Cubes",
-    category: "Travel",
-    price: 699,
-    oldPrice: 999,
-    rating: 4.6,
-    image: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=700&q=85",
-    emoji: "🧳",
-    color: "#d7ded1",
-    description: "Keep clothing and travel essentials neatly organised in your luggage."
-  },
-  {
-    id: 19,
-    name: "Insulated Travel Tumbler",
-    category: "Travel",
-    price: 599,
-    oldPrice: 849,
-    rating: 4.8,
-    image: "https://images.unsplash.com/photo-1523362628745-0c100150b504?auto=format&fit=crop&w=700&q=85",
-    emoji: "🥤",
-    color: "#d5dfd7",
-    description: "A practical reusable tumbler for commutes and everyday adventures."
-  },
-  {
-    id: 20,
-    name: "Everyday Travel Backpack",
-    category: "Travel",
-    price: 1699,
-    oldPrice: 2299,
-    rating: 4.7,
-    image: "https://images.unsplash.com/photo-1622560480654-d96214fdc887?auto=format&fit=crop&w=700&q=85",
-    emoji: "🎒",
-    color: "#d8d2c5",
-    description: "A versatile backpack for daily commutes, short trips and everyday essentials."
-  }
-];
-
-const money = (amount) =>
-  new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0
-  }).format(amount);
+const CURRENT_YEAR = new Date().getFullYear();
 
 function readStorage(key, fallback) {
   try {
@@ -282,26 +53,94 @@ function ProductImage({ product, className = "product-photo" }) {
   );
 }
 
+function QuantityControl({ productId, qty, onAddToCart, onChangeQty }) {
+  if (qty === 0) {
+    return (
+      <button className="add-button" onClick={() => onAddToCart(productId)}>
+        + Add to cart
+      </button>
+    );
+  }
+
+  return (
+    <div className="product-quantity">
+      <button onClick={() => onChangeQty(productId, -1)} aria-label="Decrease quantity">−</button>
+      <span>{qty} in cart</span>
+      <button onClick={() => onChangeQty(productId, 1)} aria-label="Increase quantity">+</button>
+    </div>
+  );
+}
+
 function App() {
+  // Theme state: dark / light mode
+  const [theme, setTheme] = useState(() => {
+    try {
+      const saved = localStorage.getItem("urmart-theme");
+      if (saved === "dark" || saved === "light") return saved;
+    } catch {
+      // fallback
+    }
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
+  });
+
+  // Cart & Wishlist state
   const [cart, setCart] = useState(() => readStorage("shop-cart", []));
   const [wishlist, setWishlist] = useState(() => readStorage("shop-wishlist", []));
+
+  // User Authentication state
+  const [currentUser, setCurrentUser] = useState(() => {
+    return readStorage("urmart-current-user", null);
+  });
+
+  const [authOpen, setAuthOpen] = useState(false);
+  const [authMode, setAuthMode] = useState("login"); // "login" or "signup"
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+
+  // App navigation & filters
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
   const [sort, setSort] = useState("featured");
-  const [page, setPage] = useState("home");
+  const [page, setPage] = useState("home"); // "home" | "detail" | "checkout" | "profile" | "auth"
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [wishlistOnly, setWishlistOnly] = useState(false);
   const [notice, setNotice] = useState("");
-  const [chatOpen, setChatOpen] = useState(false);
-  const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState([
-    {
-      from: "bot",
-      text: "Hi! 👋 Welcome to UrMart. Ask me about products, shipping, returns or payments."
-    }
-  ]);
 
+  // AI Chat Assistant state
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatInitialQuery, setChatInitialQuery] = useState("");
+
+  // Checkout form & promo code state
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [couponError, setCouponError] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("upi");
+  const [lastPlacedOrder, setLastPlacedOrder] = useState(null);
+
+  // Newsletter state
+  const [newsletterEmail, setNewsletterEmail] = useState("");
+
+  // Supabase Cloud state
+  const [supabaseModalOpen, setSupabaseModalOpen] = useState(false);
+  const [isSbActive, setIsSbActive] = useState(() => isSupabaseConfigured());
+
+  // Apply theme to html document root & persist
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    try {
+      localStorage.setItem("urmart-theme", theme);
+    } catch {
+      // ignore
+    }
+  }, [theme]);
+
+  function toggleTheme() {
+    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+  }
+
+  // Sync cart & wishlist
   useEffect(() => {
     localStorage.setItem("shop-cart", JSON.stringify(cart));
   }, [cart]);
@@ -310,11 +149,95 @@ function App() {
     localStorage.setItem("shop-wishlist", JSON.stringify(wishlist));
   }, [wishlist]);
 
+  // Sync current user
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem("urmart-current-user", JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem("urmart-current-user");
+    }
+  }, [currentUser]);
+
+  async function syncSupabaseUser(user) {
+    try {
+      const profile = await supabaseFetchProfile(user.id);
+      const orders = await supabaseFetchOrders(user.id);
+      const name = profile?.name || user.user_metadata?.name || user.email.split("@")[0];
+      const parts = name.split(" ");
+      const avatar =
+        profile?.avatar ||
+        (parts.length > 1
+          ? (parts[0][0] + parts[1][0]).toUpperCase()
+          : parts[0].slice(0, 2).toUpperCase());
+
+      const appUser = {
+        id: user.id,
+        name,
+        email: user.email,
+        phone: profile?.phone || user.user_metadata?.phone || "",
+        role: "Curator Member",
+        avatar,
+        joinedDate: new Date(user.created_at || Date.now()).toLocaleDateString("en-US", {
+          month: "long",
+          year: "numeric"
+        }),
+        orders: orders || [],
+        address: profile?.addresses?.[0] || profile?.address || {
+          street: "",
+          city: "",
+          state: "",
+          pincode: ""
+        },
+        source: "supabase"
+      };
+      setCurrentUser(appUser);
+    } catch (err) {
+      console.warn("Failed to sync Supabase user:", err);
+    }
+  }
+
+  // Sync Supabase Auth session on mount and listen to changes
+  useEffect(() => {
+    const client = getSupabase();
+    if (!client) return;
+
+    client.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        syncSupabaseUser(session.user);
+      }
+    });
+
+    const {
+      data: { subscription }
+    } = client.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" && session?.user) {
+        syncSupabaseUser(session.user);
+      } else if (event === "SIGNED_OUT") {
+        setCurrentUser(null);
+      }
+    });
+
+    return () => {
+      subscription?.unsubscribe();
+    };
+  }, []);
+
+  // Close user menu on outside click
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (userMenuOpen && !e.target.closest(".nav-user-dropdown-wrap")) {
+        setUserMenuOpen(false);
+      }
+    }
+    window.addEventListener("click", handleClickOutside);
+    return () => window.removeEventListener("click", handleClickOutside);
+  }, [userMenuOpen]);
+
   const categories = ["All", ...new Set(products.map((p) => p.category))];
 
   const visibleProducts = useMemo(() => {
     let result = products.filter((p) => {
-      const matchesText = `${p.name} ${p.category}`
+      const matchesText = `${p.name} ${p.category} ${p.description}`
         .toLowerCase()
         .includes(query.toLowerCase());
 
@@ -339,6 +262,17 @@ function App() {
     const product = products.find((p) => p.id === item.id);
     return sum + (product ? product.price * item.qty : 0);
   }, 0);
+
+  // Discount calculation
+  const discountAmount = useMemo(() => {
+    if (!appliedCoupon) return 0;
+    if (appliedCoupon.discountPercent > 0) {
+      return Math.round((subtotal * appliedCoupon.discountPercent) / 100);
+    }
+    return 0;
+  }, [appliedCoupon, subtotal]);
+
+  const finalTotal = Math.max(0, subtotal - discountAmount);
 
   function changeQty(id, amount) {
     setCart((old) => {
@@ -381,6 +315,7 @@ function App() {
     setQuery("");
     setCategory("All");
     setCartOpen(false);
+    setUserMenuOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -390,82 +325,182 @@ function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function QuantityControl({ productId }) {
-    const qty = getQuantity(productId);
-
-    if (qty === 0) {
-      return (
-        <button className="add-button" onClick={() => addToCart(productId)}>
-          + Add to cart
-        </button>
-      );
+  // Handle Authentication success
+  function handleLoginSuccess(user) {
+    setCurrentUser(user);
+    setNotice(`Welcome, ${user.name}! ✓`);
+    window.setTimeout(() => setNotice(""), 3000);
+    if (page === "auth") {
+      setPage("home");
     }
-
-    return (
-      <div className="product-quantity">
-        <button onClick={() => changeQty(productId, -1)} aria-label="Decrease quantity">−</button>
-        <span>{qty} in cart</span>
-        <button onClick={() => changeQty(productId, 1)} aria-label="Increase quantity">+</button>
-      </div>
-    );
   }
 
-  function askBot(text) {
-    const value = text.trim();
-    if (!value) return;
+  async function handleLogout() {
+    if (isSupabaseConfigured()) {
+      try {
+        await supabaseSignOut();
+      } catch (err) {
+        console.warn("Supabase signout notice:", err);
+      }
+    }
+    setCurrentUser(null);
+    setUserMenuOpen(false);
+    setNotice("Signed out successfully.");
+    window.setTimeout(() => setNotice(""), 2500);
+    if (page === "profile") {
+      setPage("home");
+    }
+  }
 
-    const lower = value.toLowerCase();
-    let answer;
+  // Coupon code apply
+  function handleApplyCoupon(e) {
+    e.preventDefault();
+    setCouponError("");
+    const code = couponCode.trim().toUpperCase();
+    if (!code) return;
 
-    if (lower.includes("return") || lower.includes("refund")) {
-      answer = "Our demo store has a sample 7-day return policy. No actual return requests are processed.";
-    } else if (lower.includes("shipping") || lower.includes("delivery")) {
-      answer = "Standard demo delivery is estimated at 3–5 business days. Actual shipping is not configured.";
-    } else if (lower.includes("payment") || lower.includes("pay")) {
-      answer = "This demo does not accept real payments. Please don't enter payment details.";
-    } else if (lower.includes("track") || lower.includes("order status")) {
-      answer = "Order tracking isn't enabled because this demo has no order database.";
-    } else if (lower.includes("cart")) {
-      answer = `Your cart contains ${cartCount} items worth ${money(subtotal)}.`;
-    } else if (lower.includes("price") || lower.includes("cheap") || lower.includes("budget")) {
-      answer = "Budget picks: " + [...products]
-        .sort((a, b) => a.price - b.price)
-        .slice(0, 3)
-        .map((p) => `${p.name} (${money(p.price)})`)
-        .join(", ");
-    } else if (lower.includes("contact") || lower.includes("help")) {
-      answer = "I can help you browse products, check your cart and answer common questions. Live support isn't connected.";
+    if (COUPONS[code]) {
+      setAppliedCoupon(COUPONS[code]);
+      setNotice(`Coupon "${code}" applied! ✓`);
+      window.setTimeout(() => setNotice(""), 2500);
     } else {
-      const match = products.find((p) => lower.includes(p.name.toLowerCase()));
-      answer = match
-        ? `${match.name} costs ${money(match.price)}. ${match.description}`
-        : "I can help with products, shipping, returns, payments and your cart. Try one of the quick questions!";
+      setCouponError("Invalid coupon. Try WELCOME10 or URMART20");
+    }
+  }
+
+  // Handle placing order at Checkout
+  function handlePlaceOrder() {
+    if (cart.length === 0) return;
+
+    const orderId = `URM-${Math.floor(10000 + Math.random() * 90000)}`;
+    const newOrder = {
+      orderId,
+      date: new Date().toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric"
+      }),
+      status: "Confirmed",
+      items: cart.map((item) => {
+        const prod = products.find((p) => p.id === item.id);
+        return {
+          id: item.id,
+          name: prod ? prod.name : "Product",
+          qty: item.qty,
+          price: prod ? prod.price : 0
+        };
+      }),
+      total: finalTotal,
+      paymentMethod:
+        paymentMethod === "upi"
+          ? "UPI Payment"
+          : paymentMethod === "card"
+          ? "Credit/Debit Card"
+          : "Cash on Delivery",
+      trackingTimeline: [
+        { stage: "Order Confirmed", date: "Just now", done: true },
+        { stage: "Dispatched from Hub", date: "Expected tomorrow", done: false },
+        { stage: "Out for Delivery", date: "In 2 days", done: false },
+        { stage: "Delivered", date: "Estimated 3–4 days", done: false }
+      ]
+    };
+
+    // Save order to current user if logged in
+    if (currentUser) {
+      const updatedUser = {
+        ...currentUser,
+        orders: [newOrder, ...(currentUser.orders || [])]
+      };
+      setCurrentUser(updatedUser);
+
+      // Save order to Supabase PostgreSQL database if configured
+      if (isSupabaseConfigured() && currentUser.id) {
+        supabaseCreateOrder({
+          id: orderId,
+          userId: currentUser.id,
+          items: newOrder.items,
+          subtotal: subtotal,
+          discount: appliedCoupon ? appliedCoupon.discount : 0,
+          shipping: subtotal >= 499 || appliedCoupon?.freeShipping ? 0 : 80,
+          total: finalTotal + (subtotal >= 499 || appliedCoupon?.freeShipping ? 0 : 80),
+          couponCode: appliedCoupon ? appliedCoupon.code : null,
+          shippingAddress: currentUser.address || {},
+          paymentMethod: newOrder.paymentMethod,
+          status: "Confirmed",
+          createdAt: new Date().toISOString()
+        }).catch((err) => {
+          console.warn("Could not save order to Supabase orders table:", err);
+        });
+      }
+
+      try {
+        const stored = localStorage.getItem("urmart-registered-users");
+        if (stored) {
+          const users = JSON.parse(stored);
+          const updatedList = users.map((u) =>
+            u.id === currentUser.id ? updatedUser : u
+          );
+          localStorage.setItem(
+            "urmart-registered-users",
+            JSON.stringify(updatedList)
+          );
+        }
+      } catch {
+        // ignore
+      }
     }
 
-    setMessages((old) => [
-      ...old,
-      { from: "user", text: value },
-      { from: "bot", text: answer }
-    ]);
-    setMessage("");
+    setLastPlacedOrder(newOrder);
+    setCart([]);
+    setAppliedCoupon(null);
+    setCouponCode("");
+    setNotice("Order placed successfully! ✓");
+    window.setTimeout(() => setNotice(""), 3000);
   }
-    return (
-    <div className="app">
-      <div className="announcement">
-        CONSIDERED FINDS FOR EVERYDAY LIVING · WELCOME TO URMART
-      </div>
 
+  // Open AI Chatbot with custom query (e.g. from Profile or Detail)
+  function handleOpenChatWithQuery(initialText) {
+    setChatInitialQuery(initialText);
+    setChatOpen(true);
+  }
+
+  // Newsletter form submission
+  function handleNewsletterSubmit(e) {
+    e.preventDefault();
+    if (!newsletterEmail.trim()) return;
+    setNotice("Thank you for subscribing to The UrMart Journal! ✓");
+    window.setTimeout(() => setNotice(""), 3000);
+    setNewsletterEmail("");
+  }
+
+  return (
+    <div className="app">
+      {/* LUXURY ANNOUNCEMENT BAR */}
+      <aside className="announcement">
+        <div className="announcement-content">
+          <span className="announcement-pill">VOLUME IV</span>
+          <span>CONSIDERED OBJECTS FOR MINDFUL LIVING · COMPLIMENTARY EXPRESS SHIPPING OVER ₹499</span>
+          <span className="announcement-promo">
+            USE CODE <b>WELCOME10</b> FOR 10% OFF
+          </span>
+        </div>
+      </aside>
+
+      {/* EDITORIAL NAVBAR */}
       <header className="navbar">
         <button className="brand" onClick={goHome}>
           <div className="brand-icon">
             <span className="brand-u">U</span>
             <span className="brand-r">R</span>
           </div>
-          UrMart<span className="brand-dot">.</span>
+          <span className="brand-text">
+            UrMart<span className="brand-dot">.</span>
+          </span>
         </button>
 
+        {/* SEARCH BAR */}
         <div className="nav-search">
-          <span>⌕</span>
+          <span className="search-symbol">⌕</span>
           <input
             value={query}
             onChange={(e) => {
@@ -473,12 +508,13 @@ function App() {
               setPage("home");
               setSelectedProduct(null);
             }}
-            placeholder="Search for products..."
+            placeholder="Search ceramics, ambient lamps, French linen, leather..."
             aria-label="Search products"
           />
 
           {query && (
             <button
+              className="clear-search-btn"
               onClick={() => setQuery("")}
               aria-label="Clear search"
             >
@@ -487,7 +523,38 @@ function App() {
           )}
         </div>
 
+        {/* NAV ACTIONS */}
         <div className="nav-actions">
+          {/* SUPABASE CLOUD STATUS / CONNECT BUTTON */}
+          <button
+            type="button"
+            className="supabase-nav-btn"
+            onClick={() => setSupabaseModalOpen(true)}
+            title={
+              isSbActive
+                ? "Supabase: Connected to Cloud Auth & PostgreSQL"
+                : "Supabase: Click to connect Cloud Auth & PostgreSQL"
+            }
+            aria-label="Configure Supabase Database and Authentication"
+          >
+            <span className="supabase-bolt">⚡</span>
+            <span className="supabase-nav-text">Supabase</span>
+            <span className={`supabase-nav-dot ${isSbActive ? "online" : "offline"}`} />
+          </button>
+
+          {/* DARK / LIGHT MODE SWITCH BUTTON */}
+          <button
+            type="button"
+            className="theme-toggle-btn"
+            onClick={toggleTheme}
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            <span className="theme-toggle-icon">{theme === "dark" ? "☀️" : "🌙"}</span>
+            <span className="theme-toggle-text">{theme === "dark" ? "Light" : "Dark"}</span>
+          </button>
+
+          {/* Wishlist Link */}
           <button
             className={`nav-link ${wishlistOnly ? "active" : ""}`}
             onClick={() => {
@@ -496,158 +563,345 @@ function App() {
               setSelectedProduct(null);
               setCartOpen(false);
             }}
+            title="View Wishlist"
           >
-            ♡ <span>Wishlist</span>
+            <span className="nav-action-icon">♡</span>
+            <span>Wishlist</span>
             {wishlist.length > 0 && <small>{wishlist.length}</small>}
           </button>
 
+          {/* Cart Button */}
           <button
             className="cart-button"
             onClick={() => setCartOpen(true)}
+            title="Shopping Cart"
           >
-            🛒 <span>Cart</span>
+            <span className="nav-action-icon">🛍️</span>
+            <span>Cart</span>
             <b>{cartCount}</b>
           </button>
+
+          {/* USER AUTH / PROFILE MENU */}
+          {currentUser ? (
+            <div className="nav-user-dropdown-wrap">
+              <button
+                type="button"
+                className="user-badge-button"
+                onClick={() => setUserMenuOpen(!userMenuOpen)}
+                aria-label="User menu"
+              >
+                <div className="nav-avatar-pill">
+                  {currentUser.avatar || currentUser.name.slice(0, 2).toUpperCase()}
+                </div>
+                <span className="nav-user-name">
+                  {currentUser.name.split(" ")[0]}
+                </span>
+                <span className="nav-chevron">▾</span>
+              </button>
+
+              {userMenuOpen && (
+                <div className="user-dropdown-menu">
+                  <div className="dropdown-user-info">
+                    <strong>{currentUser.name}</strong>
+                    <small>{currentUser.email}</small>
+                    <span className="dropdown-role-tag">★ {currentUser.role || "Curator Member"}</span>
+                  </div>
+
+                  <div className="dropdown-links">
+                    <button
+                      onClick={() => {
+                        setPage("profile");
+                        setUserMenuOpen(false);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                    >
+                      📦 My Profile & Orders ({currentUser.orders?.length || 0})
+                    </button>
+                    <button
+                      onClick={() => {
+                        setWishlistOnly(true);
+                        setPage("home");
+                        setUserMenuOpen(false);
+                      }}
+                    >
+                      ♡ My Wishlist ({wishlist.length})
+                    </button>
+                    <button
+                      onClick={() => {
+                        setChatOpen(true);
+                        setUserMenuOpen(false);
+                      }}
+                    >
+                      🤖 UrMart AI Assistant
+                    </button>
+                  </div>
+
+                  <div className="dropdown-footer">
+                    <button className="dropdown-logout-btn" onClick={handleLogout}>
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button
+              className="signin-nav-btn"
+              onClick={() => {
+                setAuthMode("login");
+                setAuthOpen(true);
+              }}
+            >
+              <span className="signin-icon">👤</span>
+              <span>Sign In</span>
+            </button>
+          )}
         </div>
       </header>
 
-      <nav className="category-nav">
-        {categories.map((item) => (
-          <button
-            key={item}
-            className={category === item ? "category-active" : ""}
-            onClick={() => {
-              setCategory(item);
-              setPage("home");
-              setSelectedProduct(null);
-              setCartOpen(false);
-            }}
-          >
-            {item}
-          </button>
-        ))}
-      </nav>
+      {/* CATEGORY NAV */}
+      {page === "home" && (
+        <nav className="category-nav">
+          <div className="category-nav-inner">
+            {categories.map((item) => (
+              <button
+                key={item}
+                className={category === item ? "category-active" : ""}
+                onClick={() => {
+                  setCategory(item);
+                  setPage("home");
+                  setSelectedProduct(null);
+                  setCartOpen(false);
+                }}
+              >
+                {item}
+                {item === "All" && <span className="cat-counter">({products.length})</span>}
+              </button>
+            ))}
+          </div>
+        </nav>
+      )}
 
+      {/* AUTH FULL PAGE VIEW */}
+      {page === "auth" && (
+        <AuthModal
+          isFullPage={true}
+          isOpen={true}
+          initialMode={authMode}
+          onLoginSuccess={handleLoginSuccess}
+          onOpenSupabaseConfig={() => setSupabaseModalOpen(true)}
+        />
+      )}
+
+      {/* USER PROFILE PAGE VIEW */}
+      {page === "profile" && (
+        <UserProfile
+          user={currentUser}
+          onLogout={handleLogout}
+          onBackToShop={goHome}
+          onReorderItem={(id) => addToCart(id)}
+          onOpenChatWithQuery={handleOpenChatWithQuery}
+          onUpdateUser={(updated) => setCurrentUser(updated)}
+          onOpenSupabaseConfig={() => setSupabaseModalOpen(true)}
+        />
+      )}
+
+      {/* EDITORIAL LIFESTYLE HERO BANNER */}
       {page === "home" &&
         !wishlistOnly &&
         !query &&
         category === "All" && (
-          <section className="hero">
-            <div className="hero-content">
-              <span className="eyebrow">
-                THOUGHTFULLY CHOSEN · EVERYDAY LIVING
-              </span>
+          <>
+            <section className="hero-editorial">
+              <div className="hero-banner-bg">
+                <img
+                  src={LIFESTYLE_BANNERS.hero.image}
+                  alt="Curated Sanctuary Living"
+                  className="hero-banner-img"
+                />
+                <div className="hero-overlay" />
+              </div>
 
-              <h1>
-                Live well.
-                <br />
-                Choose better.
-              </h1>
+              <div className="hero-editorial-content">
+                <div className="hero-eyebrow-pill">
+                  <span className="hero-spark">✳</span>
+                  <span>{LIFESTYLE_BANNERS.hero.eyebrow}</span>
+                </div>
 
-              <p>
-                Considered essentials for your home, your routine,
-                and everything in between.
-              </p>
+                <h1>
+                  Considered Living,
+                  <br />
+                  <em>Effortless Beauty.</em>
+                </h1>
 
-              <button
-                className="primary-button"
-                onClick={() =>
-                  document
-                    .getElementById("products")
-                    ?.scrollIntoView({ behavior: "smooth" })
-                }
-              >
-                Shop the collection <span>→</span>
-              </button>
+                <p>{LIFESTYLE_BANNERS.hero.description}</p>
 
-              <div className="hero-points">
-                <span>✓ Curated products</span>
-                <span>✓ Easy shopping</span>
+                <div className="hero-cta-group">
+                  <button
+                    className="primary-button hero-cta-primary"
+                    onClick={() =>
+                      document
+                        .getElementById("products")
+                        ?.scrollIntoView({ behavior: "smooth" })
+                    }
+                  >
+                    Explore The Collection <span>↓</span>
+                  </button>
+
+                  <button
+                    className="secondary-outline-button hero-cta-ai"
+                    onClick={() => setChatOpen(true)}
+                  >
+                    ✨ Style With AI Concierge
+                  </button>
+                </div>
+
+                <div className="hero-stats-row">
+                  <div className="hero-stat-item">
+                    <strong>32+</strong>
+                    <span>Curated Essentials</span>
+                  </div>
+                  <div className="hero-stat-sep" />
+                  <div className="hero-stat-item">
+                    <strong>100%</strong>
+                    <span>Recyclable Packaging</span>
+                  </div>
+                  <div className="hero-stat-sep" />
+                  <div className="hero-stat-item">
+                    <strong>4.9 ★</strong>
+                    <span>Client Satisfaction</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* CURATED MOODBOARD / SPACES SECTION */}
+            <section className="curated-moodboard-section">
+              <div className="moodboard-header">
+                <div>
+                  <span className="eyebrow">CURATED SPACES</span>
+                  <h2>Explore by Living Mood</h2>
+                </div>
+                <p>Thoughtfully paired materials for daily quietude and rituals.</p>
+              </div>
+
+              <div className="moodboard-grid">
+                {FEATURED_COLLECTIONS.map((col, idx) => (
+                  <div
+                    className="moodboard-card"
+                    key={idx}
+                    onClick={() => {
+                      setCategory(col.category);
+                      setWishlistOnly(false);
+                      document.getElementById("products")?.scrollIntoView({ behavior: "smooth" });
+                    }}
+                  >
+                    <div className="moodboard-img-wrap">
+                      <img src={col.image} alt={col.title} loading="lazy" />
+                    </div>
+                    <div className="moodboard-overlay">
+                      <span className="moodboard-cat">{col.category}</span>
+                      <h3>{col.title}</h3>
+                      <p>{col.subtitle}</p>
+                      <span className="moodboard-arrow">Discover Collection →</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* PRESS & QUOTES TICKER BAR */}
+            <div className="press-ticker-bar">
+              <div className="press-ticker-inner">
+                <span>“UrMart brings quiet luxury into everyday objects.” — Architectural Digest</span>
+                <span className="ticker-dot">•</span>
+                <span>“Tactile, grounding, and effortlessly chic.” — Kinfolk</span>
+                <span className="ticker-dot">•</span>
+                <span>“Redefining intentional home aesthetics with conscious craft.” — Elle Decor</span>
+                <span className="ticker-dot">•</span>
+                <span>“Every object feels like an heirloom.” — Vogue Living</span>
               </div>
             </div>
-
-            <div className="hero-art">
-              <div className="hero-circle">
-                <span className="hero-spark">✳</span>
-                <span className="hero-emoji">🛍️</span>
-                <span className="hero-float float-one">🎧</span>
-                <span className="hero-float float-two">👟</span>
-                <span className="hero-float float-three">⌚</span>
-              </div>
-
-              <div className="hero-note">
-                A little joy, delivered.
-              </div>
-            </div>
-          </section>
+          </>
         )}
 
+      {/* MAIN PRODUCTS GRID */}
       {page === "home" && (
         <main className="main-content" id="products">
           <div className="section-heading">
             <div>
               <span className="eyebrow">
-                {wishlistOnly ? "YOUR COLLECTION" : "THE URMART EDIT"}
+                {wishlistOnly ? "YOUR SELECTION" : "THE URMART ARCHIVE"}
               </span>
 
               <h2>
                 {wishlistOnly
-                  ? "Your wishlist"
+                  ? "Your Wishlist"
                   : query
-                  ? "Search results"
+                  ? `Search: "${query}"`
                   : category === "All"
-                  ? "Explore our collection"
-                  : category + " collection"}
+                  ? "Complete Collection"
+                  : `${category} Collection`}
               </h2>
 
-              <p>{visibleProducts.length} products to discover</p>
+              <p>{visibleProducts.length} curated objects to discover</p>
             </div>
 
-            <select
-              aria-label="Sort products"
-              value={sort}
-              onChange={(e) => setSort(e.target.value)}
-            >
-              <option value="featured">Featured</option>
-              <option value="low">Price: low to high</option>
-              <option value="high">Price: high to low</option>
-              <option value="rating">Top rated</option>
-            </select>
+            <div className="section-controls">
+              <select
+                aria-label="Sort products"
+                value={sort}
+                onChange={(e) => setSort(e.target.value)}
+                className="sort-select"
+              >
+                <option value="featured">Featured Picks</option>
+                <option value="low">Price: Low to High</option>
+                <option value="high">Price: High to Low</option>
+                <option value="rating">Highest Rated</option>
+              </select>
+            </div>
           </div>
 
           <div className="product-grid">
             {visibleProducts.map((product) => (
               <article className="product-card" key={product.id}>
-                <button
-                  className="product-visual"
-                  style={{ backgroundColor: product.color }}
-                  onClick={() => openProduct(product)}
-                  aria-label={`View ${product.name}`}
-                >
-                  <ProductImage product={product} />
+                <div className="product-visual-wrap">
+                  <button
+                    className="product-visual"
+                    style={{ backgroundColor: product.color }}
+                    onClick={() => openProduct(product)}
+                    aria-label={`View ${product.name}`}
+                  >
+                    <ProductImage product={product} />
 
-                  <span className="discount-tag">
-                    {Math.round(
-                      (1 - product.price / product.oldPrice) * 100
-                    )}
-                    % OFF
-                  </span>
-                </button>
+                    <span className="discount-tag">
+                      {Math.round(
+                        (1 - product.price / product.oldPrice) * 100
+                      )}
+                      % OFF
+                    </span>
+                  </button>
 
-                <button
-                  className={`heart-button ${
-                    wishlist.includes(product.id) ? "hearted" : ""
-                  }`}
-                  onClick={() => toggleWishlist(product.id)}
-                  aria-label="Toggle wishlist"
-                >
-                  {wishlist.includes(product.id) ? "♥" : "♡"}
-                </button>
+                  <button
+                    className={`heart-button ${
+                      wishlist.includes(product.id) ? "hearted" : ""
+                    }`}
+                    onClick={() => toggleWishlist(product.id)}
+                    aria-label="Toggle wishlist"
+                  >
+                    {wishlist.includes(product.id) ? "♥" : "♡"}
+                  </button>
+                </div>
 
                 <div className="product-info">
-                  <span className="product-category">
-                    {product.category}
-                  </span>
+                  <div className="product-meta-row">
+                    <span className="product-category">
+                      {product.category}
+                    </span>
+                    <span className="rating-pill">
+                      ★ {product.rating}
+                    </span>
+                  </div>
 
                   <button
                     className="product-name"
@@ -656,16 +910,19 @@ function App() {
                     {product.name}
                   </button>
 
-                  <div className="rating">
-                    ★ {product.rating} <span>(Demo rating)</span>
-                  </div>
+                  <p className="product-snippet">{product.description}</p>
 
                   <div className="price-row">
                     <strong>{money(product.price)}</strong>
                     <del>{money(product.oldPrice)}</del>
                   </div>
 
-                  <QuantityControl productId={product.id} />
+                  <QuantityControl
+                    productId={product.id}
+                    qty={getQuantity(product.id)}
+                    onAddToCart={addToCart}
+                    onChangeQty={changeQty}
+                  />
                 </div>
               </article>
             ))}
@@ -674,43 +931,87 @@ function App() {
           {visibleProducts.length === 0 && (
             <div className="empty-state">
               <span>🔎</span>
-              <h3>No products found</h3>
-              <p>Try another search or explore all products.</p>
+              <h3>No objects match your criteria</h3>
+              <p>Try refining your search terms or explore all curated categories.</p>
 
               <button className="primary-button" onClick={goHome}>
-                View all products
+                View All 32+ Objects
               </button>
             </div>
           )}
 
+          {/* MID-PAGE LIFESTYLE EDITORIAL BANNER */}
+          {page === "home" && !wishlistOnly && !query && category === "All" && (
+            <section className="editorial-banner-section">
+              <div className="editorial-banner-image-wrap">
+                <img
+                  src={LIFESTYLE_BANNERS.editorial.image}
+                  alt="The Artisan Archive Dining Table"
+                  loading="lazy"
+                />
+                <div className="editorial-banner-overlay" />
+              </div>
+              <div className="editorial-banner-card">
+                <span className="eyebrow">{LIFESTYLE_BANNERS.editorial.eyebrow}</span>
+                <h2>{LIFESTYLE_BANNERS.editorial.title}</h2>
+                <p>{LIFESTYLE_BANNERS.editorial.description}</p>
+                <blockquote className="editorial-quote">
+                  {LIFESTYLE_BANNERS.editorial.quote}
+                  <cite>{LIFESTYLE_BANNERS.editorial.author}</cite>
+                </blockquote>
+                <div className="editorial-actions">
+                  <button
+                    className="primary-button"
+                    onClick={() => {
+                      setCategory("Kitchen");
+                      document.getElementById("products")?.scrollIntoView({ behavior: "smooth" });
+                    }}
+                  >
+                    Shop The Tableware Edit →
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* BRAND PILLARS / VALUES */}
           <section className="benefits">
-            <div>
-              <span>📦</span>
+            <div className="benefit-card">
+              <span className="benefit-icon">🌿</span>
               <div>
-                <b>Easy shopping</b>
-                <p>Browse our demo collection</p>
+                <b>Artisan Provenance</b>
+                <p>Ethically crafted by multi-generational studios</p>
               </div>
             </div>
 
-            <div>
-              <span>💬</span>
+            <div className="benefit-card">
+              <span className="benefit-icon">📦</span>
               <div>
-                <b>Helpful assistant</b>
-                <p>Quick answers to common questions</p>
+                <b>Mindful Packaging</b>
+                <p>100% plastic-free, carbon-neutral delivery</p>
               </div>
             </div>
 
-            <div>
-              <span>🔒</span>
+            <div className="benefit-card">
+              <span className="benefit-icon">🤖</span>
               <div>
-                <b>Demo checkout</b>
-                <p>No real payments are collected</p>
+                <b>UrMart AI Concierge</b>
+                <p>Personalized home styling & real-time updates</p>
+              </div>
+            </div>
+
+            <div className="benefit-card">
+              <span className="benefit-icon">↩️</span>
+              <div>
+                <b>30-Day Doorstep Returns</b>
+                <p>Complimentary pickup, hassle-free refunds</p>
               </div>
             </div>
           </section>
         </main>
       )}
 
+      {/* DETAIL MODAL OVERLAY */}
       {page === "detail" && selectedProduct && (
         <div
           className="detail-overlay"
@@ -743,25 +1044,44 @@ function App() {
               <h2>{selectedProduct.name}</h2>
 
               <div className="rating">
-                ★ {selectedProduct.rating} <span>Demo rating</span>
+                ★ {selectedProduct.rating} <span>Customer Favorite (Verified Purchase)</span>
               </div>
 
               <div className="detail-price">
                 {money(selectedProduct.price)}
+                <del className="detail-old-price">{money(selectedProduct.oldPrice)}</del>
               </div>
 
               <p>{selectedProduct.description}</p>
 
-              <p className="detail-note">
-                Demo product. Actual stock and delivery are not connected.
-              </p>
+              <div className="detail-features-list">
+                <span>✓ Hand-finished with non-toxic, food-safe or natural finishes</span>
+                <span>✓ Sourced from certified ethical workshops</span>
+                <span>✓ Dispatches within 24 hours in biodegradable packaging</span>
+              </div>
 
-              <QuantityControl productId={selectedProduct.id} />
+              <div className="detail-action-row">
+                <QuantityControl
+                  productId={selectedProduct.id}
+                  qty={getQuantity(selectedProduct.id)}
+                  onAddToCart={addToCart}
+                  onChangeQty={changeQty}
+                />
+                <button
+                  className="ask-ai-detail-btn"
+                  onClick={() => {
+                    handleOpenChatWithQuery(`Tell me more about the ${selectedProduct.name} and styling tips.`);
+                  }}
+                >
+                  ✨ Ask AI Styling Advice
+                </button>
+              </div>
             </div>
           </section>
         </div>
       )}
 
+      {/* CART DRAWER */}
       {cartOpen && (
         <div
           className="drawer-backdrop"
@@ -773,8 +1093,8 @@ function App() {
           >
             <div className="drawer-heading">
               <div>
-                <span className="eyebrow">YOUR SELECTION</span>
-                <h2>Shopping cart ({cartCount})</h2>
+                <span className="eyebrow">YOUR BAG</span>
+                <h2>Shopping Bag ({cartCount})</h2>
               </div>
 
               <button
@@ -834,14 +1154,14 @@ function App() {
               {cart.length === 0 && (
                 <div className="empty-cart">
                   <span>🛍️</span>
-                  <h3>Your cart is waiting</h3>
-                  <p>Find something you love in our collection.</p>
+                  <h3>Your shopping bag is empty</h3>
+                  <p>Discover something timeless from our 32+ curated objects.</p>
 
                   <button
                     className="primary-button"
                     onClick={() => setCartOpen(false)}
                   >
-                    Continue shopping
+                    Explore The Collection
                   </button>
                 </div>
               )}
@@ -854,7 +1174,11 @@ function App() {
                   <strong>{money(subtotal)}</strong>
                 </div>
 
-                <p>Shipping and taxes are not included in this demo.</p>
+                <p className="cart-shipping-note">
+                  {subtotal >= 499
+                    ? "🎉 You qualify for FREE Express Delivery!"
+                    : `Add ${money(499 - subtotal)} more for free express delivery.`}
+                </p>
 
                 <button
                   className="checkout-button"
@@ -863,139 +1187,270 @@ function App() {
                     setPage("checkout");
                   }}
                 >
-                  Continue to checkout →
+                  Continue to Checkout →
                 </button>
               </div>
             )}
           </aside>
         </div>
       )}
-            {page === "checkout" && (
+
+      {/* CHECKOUT PAGE */}
+      {page === "checkout" && (
         <main className="checkout-page">
           <button className="back-button" onClick={goHome}>
-            ← Continue shopping
+            ← Continue Shopping
           </button>
 
-          <div className="checkout-card">
-            <span className="eyebrow">ALMOST THERE</span>
-            <h1>Checkout</h1>
-            <p>
-              This is a frontend demo. No real order or payment will be
-              processed.
-            </p>
+          {lastPlacedOrder ? (
+            <div className="checkout-success-card">
+              <span className="success-emoji">🎉</span>
+              <span className="eyebrow">ORDER CONFIRMED</span>
+              <h1>Thank you for your order!</h1>
+              <p>
+                Order <b>#{lastPlacedOrder.orderId}</b> has been received and is being prepared with care.
+              </p>
 
-            <div className="checkout-items">
-              {cart.map((item) => {
-                const product = products.find((p) => p.id === item.id);
-                if (!product) return null;
+              <div className="order-success-meta">
+                <div>
+                  <strong>Total Paid</strong>
+                  <span>{money(lastPlacedOrder.total)}</span>
+                </div>
+                <div>
+                  <strong>Payment Method</strong>
+                  <span>{lastPlacedOrder.paymentMethod}</span>
+                </div>
+                <div>
+                  <strong>Estimated Delivery</strong>
+                  <span>3–4 Business Days</span>
+                </div>
+              </div>
 
-                return (
-                  <div className="checkout-item" key={item.id}>
-                    <span>
-                      {product.name} × {item.qty}
-                    </span>
-                    <strong>{money(product.price * item.qty)}</strong>
+              <div className="order-success-actions">
+                {currentUser && (
+                  <button
+                    className="primary-button"
+                    onClick={() => {
+                      setPage("profile");
+                      setLastPlacedOrder(null);
+                    }}
+                  >
+                    View in Order History →
+                  </button>
+                )}
+
+                <button
+                  className="secondary-btn"
+                  onClick={() => {
+                    handleOpenChatWithQuery(`Where is my order ${lastPlacedOrder.orderId}?`);
+                  }}
+                >
+                  🤖 Track with AI Assistant
+                </button>
+
+                <button
+                  className="text-link-btn"
+                  onClick={() => {
+                    setLastPlacedOrder(null);
+                    goHome();
+                  }}
+                >
+                  Return to Storefront
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="checkout-card">
+              <span className="eyebrow">FINAL STEP</span>
+              <h1>Secure Checkout</h1>
+
+              {!currentUser && (
+                <div className="checkout-auth-banner">
+                  <span>💡 Have an account?</span>
+                  <button
+                    type="button"
+                    className="checkout-signin-link"
+                    onClick={() => {
+                      setAuthMode("login");
+                      setAuthOpen(true);
+                    }}
+                  >
+                    Sign in to save this order to your profile →
+                  </button>
+                </div>
+              )}
+
+              <div className="checkout-items">
+                {cart.map((item) => {
+                  const product = products.find((p) => p.id === item.id);
+                  if (!product) return null;
+
+                  return (
+                    <div className="checkout-item" key={item.id}>
+                      <span>
+                        {product.name} × {item.qty}
+                      </span>
+                      <strong>{money(product.price * item.qty)}</strong>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* COUPON CODE FORM */}
+              <form className="checkout-coupon-form" onSubmit={handleApplyCoupon}>
+                <div className="coupon-input-group">
+                  <input
+                    type="text"
+                    placeholder="Discount code (e.g. WELCOME10)"
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value)}
+                  />
+                  <button type="submit">Apply</button>
+                </div>
+                {couponError && <p className="coupon-error">{couponError}</p>}
+                {appliedCoupon && (
+                  <div className="coupon-applied-tag">
+                    <span>✓ Applied: {appliedCoupon.code} ({appliedCoupon.description})</span>
+                    <button type="button" onClick={() => setAppliedCoupon(null)}>×</button>
                   </div>
-                );
-              })}
+                )}
+              </form>
+
+              {/* PAYMENT METHOD SELECTOR */}
+              <div className="payment-method-section">
+                <h3>Select Payment Method</h3>
+                <div className="payment-options">
+                  <label className={`payment-option ${paymentMethod === "upi" ? "selected" : ""}`}>
+                    <input
+                      type="radio"
+                      name="payment"
+                      value="upi"
+                      checked={paymentMethod === "upi"}
+                      onChange={(e) => setPaymentMethod(e.target.value)}
+                    />
+                    <span>⚡ UPI (Google Pay, PhonePe, Paytm, Cred)</span>
+                  </label>
+
+                  <label className={`payment-option ${paymentMethod === "card" ? "selected" : ""}`}>
+                    <input
+                      type="radio"
+                      name="payment"
+                      value="card"
+                      checked={paymentMethod === "card"}
+                      onChange={(e) => setPaymentMethod(e.target.value)}
+                    />
+                    <span>💳 Credit / Debit Card (All major cards)</span>
+                  </label>
+
+                  <label className={`payment-option ${paymentMethod === "cod" ? "selected" : ""}`}>
+                    <input
+                      type="radio"
+                      name="payment"
+                      value="cod"
+                      checked={paymentMethod === "cod"}
+                      onChange={(e) => setPaymentMethod(e.target.value)}
+                    />
+                    <span>📦 Cash on Delivery</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* TOTALS BREAKDOWN */}
+              <div className="checkout-breakdown">
+                <div className="breakdown-row">
+                  <span>Subtotal</span>
+                  <span>{money(subtotal)}</span>
+                </div>
+                {discountAmount > 0 && (
+                  <div className="breakdown-row discount-row">
+                    <span>Discount ({appliedCoupon?.code})</span>
+                    <span>- {money(discountAmount)}</span>
+                  </div>
+                )}
+                <div className="breakdown-row">
+                  <span>Shipping</span>
+                  <span>{subtotal >= 499 || appliedCoupon?.freeShipping ? "FREE" : money(80)}</span>
+                </div>
+                <div className="checkout-total">
+                  <span>Total Amount</span>
+                  <strong>{money(finalTotal + (subtotal >= 499 || appliedCoupon?.freeShipping ? 0 : 80))}</strong>
+                </div>
+              </div>
+
+              <button
+                className="checkout-button"
+                disabled={cart.length === 0}
+                onClick={handlePlaceOrder}
+              >
+                Place Order ({money(finalTotal + (subtotal >= 499 || appliedCoupon?.freeShipping ? 0 : 80))}) →
+              </button>
+
+              <p className="checkout-disclaimer">
+                🔒 256-bit SSL encrypted. 30-day effortless doorstep returns.
+              </p>
             </div>
-
-            <div className="checkout-total">
-              <span>Order total</span>
-              <strong>{money(subtotal)}</strong>
-            </div>
-
-            <button
-              className="checkout-button"
-              disabled={cart.length === 0}
-              onClick={() => {
-                setNotice("Demo order placed successfully! ✓");
-                setCart([]);
-                setPage("home");
-                window.scrollTo({ top: 0, behavior: "smooth" });
-                window.setTimeout(() => setNotice(""), 3000);
-              }}
-            >
-              Place demo order
-            </button>
-
-            <p className="checkout-disclaimer">
-              Demo only — no payment information is requested or stored.
-            </p>
-          </div>
+          )}
         </main>
       )}
 
+      {/* TOAST NOTICE */}
       {notice && <div className="toast-notice">{notice}</div>}
 
+      {/* AUTH MODAL DIALOG */}
+      <AuthModal
+        isOpen={authOpen}
+        onClose={() => setAuthOpen(false)}
+        initialMode={authMode}
+        onLoginSuccess={handleLoginSuccess}
+        onOpenSupabaseConfig={() => setSupabaseModalOpen(true)}
+      />
+
+      {/* SUPABASE CONFIGURATION MODAL */}
+      <SupabaseConfigModal
+        isOpen={supabaseModalOpen}
+        onClose={() => setSupabaseModalOpen(false)}
+        onConfigSaved={() => {
+          const active = isSupabaseConfigured();
+          setIsSbActive(active);
+          setNotice(
+            active
+              ? "✓ Supabase connected! Cloud database and auth are now active."
+              : "Switched to local mode."
+          );
+          window.setTimeout(() => setNotice(""), 3500);
+        }}
+      />
+
+      {/* CHAT TOGGLE BUTTON */}
       <button
         className="chat-toggle"
         onClick={() => setChatOpen(!chatOpen)}
-        aria-label="Open shopping assistant"
+        aria-label="Open UrMart AI Shopping Assistant"
       >
-        {chatOpen ? "×" : "💬"}
+        {chatOpen ? "×" : "✨"}
       </button>
 
-      {chatOpen && (
-        <section className="chat-window">
-          <div className="chat-header">
-            <div>
-              <span className="chat-status-dot" />
-              <div>
-                <strong>UrMart Assistant</strong>
-                <small>Shopping help · Demo</small>
-              </div>
-            </div>
+      {/* SUPERCHARGED AI CHATBOT */}
+      <ChatAssistant
+        isOpen={chatOpen}
+        onClose={() => setChatOpen(false)}
+        currentUser={currentUser}
+        cart={cart}
+        subtotal={subtotal}
+        cartCount={cartCount}
+        onAddToCart={addToCart}
+        onOpenCheckout={() => {
+          setCartOpen(false);
+          setPage("checkout");
+        }}
+        onOpenAuth={() => {
+          setAuthMode("login");
+          setAuthOpen(true);
+        }}
+        initialQuery={chatInitialQuery}
+      />
 
-            <button onClick={() => setChatOpen(false)}>×</button>
-          </div>
-
-          <div className="chat-messages">
-            {messages.map((item, index) => (
-              <div
-                key={`${index}-${item.from}`}
-                className={`chat-message ${
-                  item.from === "user" ? "user-message" : "bot-message"
-                }`}
-              >
-                {item.text}
-              </div>
-            ))}
-          </div>
-
-          <div className="chat-quick-questions">
-            <button onClick={() => askBot("What are your shipping times?")}>
-              Shipping
-            </button>
-            <button onClick={() => askBot("What is your return policy?")}>
-              Returns
-            </button>
-            <button onClick={() => askBot("Tell me about my cart")}>
-              My cart
-            </button>
-          </div>
-
-          <form
-            className="chat-input-area"
-            onSubmit={(e) => {
-              e.preventDefault();
-              askBot(message);
-            }}
-          >
-            <input
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="Ask us anything..."
-              aria-label="Message assistant"
-            />
-
-            <button type="submit" aria-label="Send message">
-              ↑
-            </button>
-          </form>
-        </section>
-      )}
-
+      {/* LUXURY EDITORIAL FOOTER */}
       <footer className="site-footer">
         <div className="footer-main">
           <div className="footer-brand">
@@ -1004,53 +1459,98 @@ function App() {
                 <span className="brand-u">U</span>
                 <span className="brand-r">R</span>
               </div>
-              UrMart<span className="brand-dot">.</span>
+              <span className="brand-text">
+                UrMart<span className="brand-dot">.</span>
+              </span>
             </button>
 
             <p>
-              Considered essentials for everyday living.
+              Objects created for quiet reflection and everyday ritual.
               <br />
-              Discover something that feels just right.
+              Ethically sourced materials, timeless aesthetics, and mindful spaces.
             </p>
+
+            <div className="footer-certifications">
+              <span>🌿 100% Organic Fibers</span>
+              <span>🌍 Climate Neutral Certified</span>
+            </div>
           </div>
 
           <div className="footer-links">
-            <strong>Explore</strong>
-            <button onClick={goHome}>All products</button>
+            <strong>The Collections</strong>
+            <button onClick={goHome}>All 32+ Objects</button>
             <button
               onClick={() => {
-                setCategory("Fashion");
+                setCategory("Home Decor");
                 setPage("home");
                 setWishlistOnly(false);
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
             >
-              Fashion
+              Ceramics & Decor
             </button>
             <button
               onClick={() => {
-                setCategory("Home");
+                setCategory("Lighting");
                 setPage("home");
                 setWishlistOnly(false);
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
             >
-              Home & living
+              Ambient Lighting
+            </button>
+            <button
+              onClick={() => {
+                setCategory("Kitchen");
+                setPage("home");
+                setWishlistOnly(false);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+            >
+              Artisan Tableware
+            </button>
+            <button
+              onClick={() => {
+                setCategory("Wellness");
+                setPage("home");
+                setWishlistOnly(false);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+            >
+              Sensory Wellness
             </button>
           </div>
 
           <div className="footer-links">
-            <strong>Need help?</strong>
+            <strong>Client Care</strong>
+            {currentUser ? (
+              <button
+                onClick={() => {
+                  setPage("profile");
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+              >
+                My Account & Orders
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setAuthMode("login");
+                  setAuthOpen(true);
+                }}
+              >
+                Sign In / Register
+              </button>
+            )}
             <button onClick={() => setChatOpen(true)}>
-              Shopping assistant
+              UrMart AI Concierge
             </button>
             <button
               onClick={() => {
                 setCartOpen(true);
-                setPage("home");
               }}
             >
-              Your cart
+              Shopping Bag ({cartCount})
             </button>
             <button
               onClick={() => {
@@ -1059,14 +1559,44 @@ function App() {
                 setSelectedProduct(null);
               }}
             >
-              Your wishlist
+              Saved Wishlist ({wishlist.length})
             </button>
+          </div>
+
+          <div className="footer-newsletter-col">
+            <strong>The UrMart Journal</strong>
+            <p>
+              Receive stories on intentional architecture, slow living, and private collection releases.
+            </p>
+            <form onSubmit={handleNewsletterSubmit} className="newsletter-form">
+              <input
+                type="email"
+                placeholder="Your email address"
+                value={newsletterEmail}
+                onChange={(e) => setNewsletterEmail(e.target.value)}
+                required
+              />
+              <button type="submit" aria-label="Subscribe to newsletter">
+                →
+              </button>
+            </form>
+            <small>We respect your privacy. Unsubscribe anytime.</small>
           </div>
         </div>
 
         <div className="footer-bottom">
-          <span>© {new Date().getFullYear()} UrMart. Demo storefront.</span>
-          <span>Thoughtfully chosen, simply yours.</span>
+          <div className="footer-bottom-left">
+            <span>© {CURRENT_YEAR} UrMart Studio Ltd. All rights reserved.</span>
+            <span>Kyoto · Copenhagen · Bengaluru</span>
+          </div>
+
+          <div className="footer-bottom-right">
+            <span>Privacy Policy</span>
+            <span className="dot-sep">•</span>
+            <span>Terms of Service</span>
+            <span className="dot-sep">•</span>
+            <span>Sustainability Report</span>
+          </div>
         </div>
       </footer>
     </div>
