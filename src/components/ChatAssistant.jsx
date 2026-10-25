@@ -44,6 +44,7 @@ export default function ChatAssistant({
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const lastSubmitTimeRef = useRef(0);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -294,8 +295,13 @@ export default function ChatAssistant({
     };
   }
 
-  // Live Gemini API caller (optional enhanced mode)
+  // Live Gemini API caller (Secure: API key sent via header, never in URL query string)
   async function callGeminiAPI(userPrompt, apiKey) {
+    const cleanKey = (apiKey || "").trim();
+    if (!cleanKey) throw new Error("No Gemini API key provided");
+
+    const sanitizedPrompt = (userPrompt || "").slice(0, 500).trim();
+
     const systemPrompt = `You are UrMart AI, an elegant, friendly, and knowledgeable e-commerce shopping assistant for UrMart, a curated lifestyle store.
 Store Catalog Categories: Home Decor, Lighting, Kitchen, Workspace, Wellness, Travel.
 Current User: ${currentUser ? currentUser.name : "Guest"}.
@@ -303,34 +309,50 @@ Cart items count: ${cartCount}. Subtotal: ${money(subtotal)}.
 Coupons available: WELCOME10 (10% off), URMART20 (20% off), FREESHIP (Free express delivery).
 Keep responses warm, concise, helpful, and beautifully styled with bullet points where appropriate.`;
 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    // Secure endpoint: do NOT append ?key= in the query URL
+    const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
     const res = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": cleanKey
+      },
       body: JSON.stringify({
         contents: [
           {
             role: "user",
-            parts: [{ text: `${systemPrompt}\n\nUser Question: ${userPrompt}` }]
+            parts: [{ text: `${systemPrompt}\n\nUser Question: ${sanitizedPrompt}` }]
           }
         ]
       })
     });
 
-    if (!res.ok) throw new Error("Gemini API error");
+    if (!res.ok) {
+      throw new Error(`Gemini API error (Status ${res.status})`);
+    }
     const data = await res.json();
     return data.candidates?.[0]?.content?.parts?.[0]?.text;
   }
 
-  // Handle message submission
+  // Handle message submission with rate-limiting & input sanitization
   async function handleUserSubmit(text) {
-    const query = text || input;
-    if (!query.trim() || isTyping) return;
+    const rawQuery = (text || input || "").trim();
+    if (!rawQuery || isTyping) return;
+
+    // Enforce 1200ms anti-spam cooldown
+    const now = Date.now();
+    if (now - lastSubmitTimeRef.current < 1200) {
+      return;
+    }
+    lastSubmitTimeRef.current = now;
+
+    // Truncate to maximum 500 characters
+    const query = rawQuery.slice(0, 500);
 
     const userMessage = {
       id: `usr_${Date.now()}`,
       from: "user",
-      text: query.trim(),
+      text: query,
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     };
 
@@ -350,6 +372,8 @@ Keep responses warm, concise, helpful, and beautifully styled with bullet points
               id: `bot_${Date.now()}`,
               from: "bot",
               text: geminiResponse,
+              engine: "gemini",
+              engineLabel: "⚡ Gemini 1.5 Flash AI",
               time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
               suggestions: ["✨ Best sellers", "🎁 Gifts under ₹1000", "🛒 My Cart"]
             }
@@ -357,14 +381,16 @@ Keep responses warm, concise, helpful, and beautifully styled with bullet points
           return;
         }
       } catch (err) {
-        console.warn("Gemini API call failed, falling back to smart built-in engine", err);
+        console.warn("Gemini API call failed, falling back to smart catalog engine", err);
       }
     }
 
-    // Built-in Smart Response with realistic conversational delay
+    // Built-in Smart Catalog Engine
     setTimeout(() => {
       const botReply = generateSmartResponse(query);
       setIsTyping(false);
+
+      const hadKeyError = Boolean(geminiApiKey.trim());
 
       setMessages((prev) => [
         ...prev,
@@ -379,6 +405,10 @@ Keep responses warm, concise, helpful, and beautifully styled with bullet points
           subtotal: botReply.subtotal,
           coupons: botReply.coupons,
           suggestions: botReply.suggestions,
+          engine: "catalog",
+          engineLabel: hadKeyError
+            ? "UrMart Curated Engine (Gemini fallback)"
+            : "UrMart Curated Engine",
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
         }
       ]);
@@ -620,6 +650,11 @@ Keep responses warm, concise, helpful, and beautifully styled with bullet points
                 </button>
               )}
 
+              {item.engineLabel && (
+                <div style={{ fontSize: "0.68rem", opacity: 0.75, marginTop: "0.3rem", fontStyle: "italic" }}>
+                  {item.engineLabel}
+                </div>
+              )}
               <span className="message-timestamp">{item.time}</span>
             </div>
           </div>
@@ -667,6 +702,7 @@ Keep responses warm, concise, helpful, and beautifully styled with bullet points
           ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
+          maxLength={500}
           placeholder="Ask for recommendations, gift ideas, shipping..."
           aria-label="Ask assistant"
           disabled={isTyping}

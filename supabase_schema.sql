@@ -102,10 +102,22 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
--- 8. Grant table access to API roles (RLS policies will govern row-level access)
+-- 8. Least-Privilege SQL Grants
 grant usage on schema public to anon, authenticated;
-grant all on table public.profiles to anon, authenticated, service_role;
-grant all on table public.orders to anon, authenticated, service_role;
+
+-- Revoke all blanket permissions from anon and authenticated roles
+revoke all on table public.profiles from anon;
+revoke all on table public.orders from anon;
+revoke all on table public.profiles from authenticated;
+revoke all on table public.orders from authenticated;
+
+-- Grant only required table privileges to authenticated users
+grant select, insert, update on table public.profiles to authenticated;
+grant select, insert on table public.orders to authenticated;
+
+-- Keep administrative full control for service_role backend operations only
+grant all on table public.profiles to service_role;
+grant all on table public.orders to service_role;
 
 -- ====================================================================
 -- SUCCESS: Profiles & Orders tables with RLS and trigger are configured!

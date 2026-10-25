@@ -19,6 +19,10 @@ import {
   supabaseFetchOrders,
   supabaseFetchProfile
 } from "./lib/supabase";
+import {
+  validateCartItems,
+  calculateAuthoritativeTotals
+} from "./lib/orderValidation";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -118,6 +122,8 @@ function App() {
   const [couponError, setCouponError] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("upi");
   const [lastPlacedOrder, setLastPlacedOrder] = useState(null);
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [checkoutError, setCheckoutError] = useState("");
 
   // Newsletter state
   const [newsletterEmail, setNewsletterEmail] = useState("");
@@ -368,11 +374,31 @@ function App() {
     }
   }
 
-  // Handle placing order at Checkout
-  function handlePlaceOrder() {
-    if (cart.length === 0) return;
+  // Handle placing order at Checkout with authoritative verification & double-submit protection
+  async function handlePlaceOrder() {
+    if (cart.length === 0 || isPlacingOrder) return;
+    setCheckoutError("");
+
+    // 1. Authoritative validation against product catalog
+    const { valid, items: validatedItems, errors } = validateCartItems(cart);
+    if (!valid) {
+      setCheckoutError(errors[0] || "Invalid items in cart. Please review your cart.");
+      return;
+    }
+
+    // 2. Authoritative calculation of subtotal, discount, shipping, total
+    const totals = calculateAuthoritativeTotals(validatedItems, appliedCoupon?.code);
+
+    setIsPlacingOrder(true);
 
     const orderId = `URM-${Math.floor(10000 + Math.random() * 90000)}`;
+    const formattedPayment =
+      paymentMethod === "upi"
+        ? "UPI (Simulated Demo Payment)"
+        : paymentMethod === "card"
+        ? "Credit/Debit Card (Simulated Demo Payment)"
+        : "Cash on Delivery (Demo Order)";
+
     const newOrder = {
       orderId,
       date: new Date().toLocaleDateString("en-US", {
@@ -380,23 +406,14 @@ function App() {
         day: "numeric",
         year: "numeric"
       }),
-      status: "Confirmed",
-      items: cart.map((item) => {
-        const prod = products.find((p) => p.id === item.id);
-        return {
-          id: item.id,
-          name: prod ? prod.name : "Product",
-          qty: item.qty,
-          price: prod ? prod.price : 0
-        };
-      }),
-      total: finalTotal,
-      paymentMethod:
-        paymentMethod === "upi"
-          ? "UPI Payment"
-          : paymentMethod === "card"
-          ? "Credit/Debit Card"
-          : "Cash on Delivery",
+      status: "Confirmed (Simulated Demo)",
+      items: validatedItems,
+      subtotal: totals.subtotal,
+      discount: totals.discount,
+      shipping: totals.shipping,
+      total: totals.total,
+      couponCode: totals.couponCode,
+      paymentMethod: formattedPayment,
       trackingTimeline: [
         { stage: "Order Confirmed", date: "Just now", done: true },
         { stage: "Dispatched from Hub", date: "Expected tomorrow", done: false },
@@ -405,57 +422,48 @@ function App() {
       ]
     };
 
-    // Save order to current user if logged in
+    // 3. Persist to Supabase if configured and authenticated
+    if (isSupabaseConfigured() && currentUser?.id && !currentUser.isDemo) {
+      const { error } = await supabaseCreateOrder({
+        id: orderId,
+        userId: currentUser.id,
+        items: validatedItems,
+        subtotal: totals.subtotal,
+        discount: totals.discount,
+        shipping: totals.shipping,
+        total: totals.total,
+        couponCode: totals.couponCode,
+        shippingAddress: currentUser.address || {},
+        paymentMethod: formattedPayment,
+        status: "Confirmed",
+        createdAt: new Date().toISOString()
+      });
+
+      if (error) {
+        setIsPlacingOrder(false);
+        setCheckoutError(
+          `Could not save order to your account: ${error.message || "Database error"}. Please try again.`
+        );
+        return;
+      }
+    }
+
+    // Save order to local user state
     if (currentUser) {
       const updatedUser = {
         ...currentUser,
         orders: [newOrder, ...(currentUser.orders || [])]
       };
       setCurrentUser(updatedUser);
-
-      // Save order to Supabase PostgreSQL database if configured
-      if (isSupabaseConfigured() && currentUser.id) {
-        supabaseCreateOrder({
-          id: orderId,
-          userId: currentUser.id,
-          items: newOrder.items,
-          subtotal: subtotal,
-          discount: appliedCoupon ? appliedCoupon.discount : 0,
-          shipping: subtotal >= 499 || appliedCoupon?.freeShipping ? 0 : 80,
-          total: finalTotal + (subtotal >= 499 || appliedCoupon?.freeShipping ? 0 : 80),
-          couponCode: appliedCoupon ? appliedCoupon.code : null,
-          shippingAddress: currentUser.address || {},
-          paymentMethod: newOrder.paymentMethod,
-          status: "Confirmed",
-          createdAt: new Date().toISOString()
-        }).catch((err) => {
-          console.warn("Could not save order to Supabase orders table:", err);
-        });
-      }
-
-      try {
-        const stored = localStorage.getItem("urmart-registered-users");
-        if (stored) {
-          const users = JSON.parse(stored);
-          const updatedList = users.map((u) =>
-            u.id === currentUser.id ? updatedUser : u
-          );
-          localStorage.setItem(
-            "urmart-registered-users",
-            JSON.stringify(updatedList)
-          );
-        }
-      } catch {
-        // ignore
-      }
     }
 
+    setIsPlacingOrder(false);
     setLastPlacedOrder(newOrder);
     setCart([]);
     setAppliedCoupon(null);
     setCouponCode("");
-    setNotice("Order placed successfully! ✓");
-    window.setTimeout(() => setNotice(""), 3000);
+    setNotice("Order placed and confirmed successfully! ✓");
+    window.setTimeout(() => setNotice(""), 3500);
   }
 
   // Open AI Chatbot with custom query (e.g. from Profile or Detail)
@@ -1213,7 +1221,7 @@ function App() {
 
               <div className="order-success-meta">
                 <div>
-                  <strong>Total Paid</strong>
+                  <strong>Total (Demo)</strong>
                   <span>{money(lastPlacedOrder.total)}</span>
                 </div>
                 <div>
@@ -1225,6 +1233,9 @@ function App() {
                   <span>3–4 Business Days</span>
                 </div>
               </div>
+              <p style={{ fontSize: "0.82rem", color: "var(--text-muted, #777)", textAlign: "center", marginTop: "0.75rem" }}>
+                ℹ️ This order is a simulated academic demonstration. No actual funds were charged.
+              </p>
 
               <div className="order-success-actions">
                 {currentUser && (
@@ -1262,7 +1273,18 @@ function App() {
           ) : (
             <div className="checkout-card">
               <span className="eyebrow">FINAL STEP</span>
-              <h1>Secure Checkout</h1>
+              <h1>Checkout</h1>
+
+              <div className="checkout-demo-banner" style={{ background: "rgba(119, 125, 90, 0.1)", border: "1px dashed var(--accent, #777d5a)", padding: "0.6rem 0.9rem", borderRadius: "8px", marginBottom: "1rem", fontSize: "0.82rem" }}>
+                <span>ℹ️ <strong>Academic Demo Mode:</strong> Checkout and payments are simulated. No live cards or bank accounts will be charged.</span>
+              </div>
+
+              {checkoutError && (
+                <div className="auth-error-banner" role="alert" style={{ marginBottom: "1rem" }}>
+                  <span>⚠️</span>
+                  <p>{checkoutError}</p>
+                </div>
+              )}
 
               {!currentUser && (
                 <div className="checkout-auth-banner">
@@ -1328,7 +1350,7 @@ function App() {
                       checked={paymentMethod === "upi"}
                       onChange={(e) => setPaymentMethod(e.target.value)}
                     />
-                    <span>⚡ UPI (Google Pay, PhonePe, Paytm, Cred)</span>
+                    <span>⚡ UPI (Simulated Demo Payment)</span>
                   </label>
 
                   <label className={`payment-option ${paymentMethod === "card" ? "selected" : ""}`}>
@@ -1339,7 +1361,7 @@ function App() {
                       checked={paymentMethod === "card"}
                       onChange={(e) => setPaymentMethod(e.target.value)}
                     />
-                    <span>💳 Credit / Debit Card (All major cards)</span>
+                    <span>💳 Credit / Debit Card (Simulated Demo Payment)</span>
                   </label>
 
                   <label className={`payment-option ${paymentMethod === "cod" ? "selected" : ""}`}>
@@ -1350,7 +1372,7 @@ function App() {
                       checked={paymentMethod === "cod"}
                       onChange={(e) => setPaymentMethod(e.target.value)}
                     />
-                    <span>📦 Cash on Delivery</span>
+                    <span>📦 Cash on Delivery (Demo Order)</span>
                   </label>
                 </div>
               </div>
@@ -1379,10 +1401,12 @@ function App() {
 
               <button
                 className="checkout-button"
-                disabled={cart.length === 0}
+                disabled={cart.length === 0 || isPlacingOrder}
                 onClick={handlePlaceOrder}
               >
-                Place Order ({money(finalTotal + (subtotal >= 499 || appliedCoupon?.freeShipping ? 0 : 80))}) →
+                {isPlacingOrder
+                  ? "Confirming Order..."
+                  : `Place Order (${money(finalTotal + (subtotal >= 499 || appliedCoupon?.freeShipping ? 0 : 80))}) →`}
               </button>
 
               <p className="checkout-disclaimer">

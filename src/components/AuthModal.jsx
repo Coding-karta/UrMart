@@ -44,25 +44,6 @@ export default function AuthModal({
 
   if (!isOpen && !isFullPage) return null;
 
-  // Local storage helpers
-  function getRegisteredUsers() {
-    try {
-      const stored = localStorage.getItem("urmart-registered-users");
-      if (stored) return JSON.parse(stored);
-    } catch {
-      // fallback
-    }
-    return INITIAL_DEMO_USERS;
-  }
-
-  function saveRegisteredUsers(users) {
-    try {
-      localStorage.setItem("urmart-registered-users", JSON.stringify(users));
-    } catch {
-      // ignore
-    }
-  }
-
   // Password strength calculator
   function getPasswordStrength(pwd) {
     if (!pwd) return { score: 0, label: "", color: "" };
@@ -80,7 +61,18 @@ export default function AuthModal({
 
   const pwdStrength = getPasswordStrength(signupPassword);
 
-  // Handle standard Login
+  // Quick Demo Guest Login (preview only, no password stored, clearly separated)
+  function handleDemoLogin(demoUserIndex = 0) {
+    const demoUser = INITIAL_DEMO_USERS[demoUserIndex] || INITIAL_DEMO_USERS[0];
+    onLoginSuccess({
+      ...demoUser,
+      isDemo: true,
+      source: "demo"
+    });
+    if (onClose) onClose();
+  }
+
+  // Handle standard Login via Supabase Auth
   async function handleLoginSubmit(e) {
     e.preventDefault();
     setError("");
@@ -97,77 +89,60 @@ export default function AuthModal({
       return;
     }
 
-    setIsLoading(true);
-
-    // 1. SUPABASE CLOUD AUTHENTICATION (if configured)
-    if (isSupabaseConfigured()) {
-      try {
-        const { user, profile } = await supabaseSignIn({
-          email: loginEmail.trim(),
-          password: loginPassword
-        });
-
-        const orders = (await supabaseFetchOrders(user.id)) || [];
-
-        // Build clean user session object
-        const parts = (profile?.name || user.user_metadata?.name || user.email.split("@")[0]).split(" ");
-        const avatar =
-          profile?.avatar ||
-          (parts.length > 1
-            ? (parts[0][0] + parts[1][0]).toUpperCase()
-            : parts[0].slice(0, 2).toUpperCase());
-
-        const appUser = {
-          id: user.id,
-          name: profile?.name || user.user_metadata?.name || user.email.split("@")[0],
-          email: user.email,
-          phone: profile?.phone || user.user_metadata?.phone || "",
-          role: "Curator Member",
-          avatar,
-          joinedDate: new Date(user.created_at || Date.now()).toLocaleDateString("en-US", {
-            month: "long",
-            year: "numeric"
-          }),
-          orders,
-          address: profile?.addresses?.[0] || profile?.address || {
-            street: "",
-            city: "",
-            state: "",
-            pincode: ""
-          },
-          source: "supabase"
-        };
-
-        setIsLoading(false);
-        onLoginSuccess(appUser);
-        if (onClose) onClose();
-        return;
-      } catch (err) {
-        setIsLoading(false);
-        setError(err.message || "Failed to sign in with Supabase credentials.");
-        return;
-      }
+    // Supabase Auth is the sole authentication mechanism for real accounts
+    if (!isSupabaseConfigured()) {
+      setError(
+        "Supabase is not configured yet. Please connect your Supabase project via '⚡ Connect Supabase Cloud' to sign in with real credentials, or continue as a Demo Guest below."
+      );
+      return;
     }
 
-    // 2. LOCAL STORAGE FALLBACK
-    setTimeout(() => {
-      const users = getRegisteredUsers();
-      const foundUser = users.find(
-        (u) =>
-          u.email.toLowerCase() === loginEmail.trim().toLowerCase() &&
-          u.password === loginPassword
-      );
+    setIsLoading(true);
 
-      if (!foundUser) {
-        setIsLoading(false);
-        setError("Invalid email or password. Please check your credentials.");
-        return;
-      }
+    try {
+      const { user, profile } = await supabaseSignIn({
+        email: loginEmail.trim(),
+        password: loginPassword
+      });
+
+      const orders = (await supabaseFetchOrders(user.id)) || [];
+
+      // Build clean user session object
+      const parts = (profile?.name || user.user_metadata?.name || user.email.split("@")[0]).split(" ");
+      const avatar =
+        profile?.avatar ||
+        (parts.length > 1
+          ? (parts[0][0] + parts[1][0]).toUpperCase()
+          : parts[0].slice(0, 2).toUpperCase());
+
+      const appUser = {
+        id: user.id,
+        name: profile?.name || user.user_metadata?.name || user.email.split("@")[0],
+        email: user.email,
+        phone: profile?.phone || user.user_metadata?.phone || "",
+        role: "Curator Member",
+        avatar,
+        joinedDate: new Date(user.created_at || Date.now()).toLocaleDateString("en-US", {
+          month: "long",
+          year: "numeric"
+        }),
+        orders,
+        address: profile?.addresses?.[0] || profile?.address || {
+          street: "",
+          city: "",
+          state: "",
+          pincode: ""
+        },
+        source: "supabase"
+      };
 
       setIsLoading(false);
-      onLoginSuccess(foundUser);
+      onLoginSuccess(appUser);
       if (onClose) onClose();
-    }, 400);
+    } catch (err) {
+      setIsLoading(false);
+      setError(err.message || "Invalid login credentials. Please verify your email and password.");
+    }
   }
 
   // Handle Sign Up Submit
@@ -207,113 +182,68 @@ export default function AuthModal({
       return;
     }
 
-    setIsLoading(true);
-
-    // 1. SUPABASE CLOUD SIGNUP
-    if (isSupabaseConfigured()) {
-      try {
-        const { user, session } = await supabaseSignUp({
-          email: signupEmail.trim(),
-          password: signupPassword,
-          name: signupName.trim()
-        });
-
-        setIsLoading(false);
-
-        // If email confirmation is disabled or session exists, log in immediately
-        if (session && user) {
-          const parts = signupName.trim().split(" ");
-          const avatar =
-            parts.length > 1
-              ? (parts[0][0] + parts[1][0]).toUpperCase()
-              : parts[0].slice(0, 2).toUpperCase();
-
-          const appUser = {
-            id: user.id,
-            name: signupName.trim(),
-            email: user.email,
-            phone: "",
-            role: "Curator Member",
-            avatar,
-            joinedDate: new Date().toLocaleDateString("en-US", {
-              month: "long",
-              year: "numeric"
-            }),
-            orders: [],
-            address: { street: "", city: "", state: "", pincode: "" },
-            source: "supabase"
-          };
-          onLoginSuccess(appUser);
-          if (onClose) onClose();
-        } else {
-          // Email confirmation is required by Supabase settings
-          setSuccessNotice(
-            "✓ Registration successful in Supabase! Check your inbox to confirm your email, or sign in now."
-          );
-          setMode("login");
-          setLoginEmail(signupEmail.trim());
-        }
-        return;
-      } catch (err) {
-        setIsLoading(false);
-        const msg = err.message || "";
-        if (msg.toLowerCase().includes("rate limit")) {
-          setError(
-            "Supabase default email limit reached. In your Supabase Dashboard, go to Authentication → Providers → Email, toggle OFF 'Confirm email', and click Save to enable instant signups!"
-          );
-        } else {
-          setError(msg || "Failed to create Supabase account.");
-        }
-        return;
-      }
+    // Real account registration requires Supabase
+    if (!isSupabaseConfigured()) {
+      setIsLoading(false);
+      setError(
+        "Supabase is not configured yet. Please connect your Supabase project via '⚡ Connect Supabase Cloud' to register a real account, or try Demo Guest Mode."
+      );
+      return;
     }
 
-    // 2. LOCAL STORAGE SIGNUP
-    setTimeout(() => {
-      const users = getRegisteredUsers();
-      const exists = users.some(
-        (u) => u.email.toLowerCase() === signupEmail.trim().toLowerCase()
-      );
-
-      if (exists) {
-        setIsLoading(false);
-        setError("An account with this email already exists. Please sign in instead.");
-        return;
-      }
-
-      const parts = signupName.trim().split(" ");
-      const avatar =
-        parts.length > 1
-          ? (parts[0][0] + parts[1][0]).toUpperCase()
-          : parts[0].slice(0, 2).toUpperCase();
-
-      const newUser = {
-        id: `usr_${Date.now()}`,
-        name: signupName.trim(),
+    try {
+      const { user, session } = await supabaseSignUp({
         email: signupEmail.trim(),
         password: signupPassword,
-        role: "Curator Member",
-        avatar: avatar,
-        joinedDate: new Date().toLocaleDateString("en-US", {
-          month: "long",
-          year: "numeric"
-        }),
-        orders: [],
-        address: {
-          street: "",
-          city: "",
-          state: "",
-          pincode: ""
-        }
-      };
-
-      const updatedUsers = [...users, newUser];
-      saveRegisteredUsers(updatedUsers);
+        name: signupName.trim()
+      });
 
       setIsLoading(false);
-      onLoginSuccess(newUser);
-      if (onClose) onClose();
-    }, 450);
+
+      // If email confirmation is disabled or session exists, log in immediately
+      if (session && user) {
+        const parts = signupName.trim().split(" ");
+        const avatar =
+          parts.length > 1
+            ? (parts[0][0] + parts[1][0]).toUpperCase()
+            : parts[0].slice(0, 2).toUpperCase();
+
+        const appUser = {
+          id: user.id,
+          name: signupName.trim(),
+          email: user.email,
+          phone: "",
+          role: "Curator Member",
+          avatar,
+          joinedDate: new Date().toLocaleDateString("en-US", {
+            month: "long",
+            year: "numeric"
+          }),
+          orders: [],
+          address: { street: "", city: "", state: "", pincode: "" },
+          source: "supabase"
+        };
+        onLoginSuccess(appUser);
+        if (onClose) onClose();
+      } else {
+        // Email confirmation is required by Supabase settings
+        setSuccessNotice(
+          "✓ Registration successful in Supabase! Check your inbox to confirm your email, or sign in now."
+        );
+        setMode("login");
+        setLoginEmail(signupEmail.trim());
+      }
+    } catch (err) {
+      setIsLoading(false);
+      const msg = err.message || "";
+      if (msg.toLowerCase().includes("rate limit")) {
+        setError(
+          "Supabase email rate limit reached. In your Supabase Dashboard, go to Authentication → Providers → Email, toggle OFF 'Confirm email', and click Save to enable instant signups!"
+        );
+      } else {
+        setError(msg || "Failed to create Supabase account.");
+      }
+    }
   }
 
   // Handle Forgot Password submit
@@ -321,30 +251,23 @@ export default function AuthModal({
     e.preventDefault();
     if (!forgotEmail.trim()) return;
 
-    if (isSupabaseConfigured()) {
-      try {
-        await supabaseResetPassword(forgotEmail.trim());
-        setForgotSent(true);
-        setTimeout(() => {
-          setForgotSent(false);
-          setForgotOpen(false);
-          setForgotEmail("");
-          setSuccessNotice("Password reset email sent from Supabase!");
-        }, 2000);
-        return;
-      } catch (err) {
-        setError(err.message || "Failed to send reset link.");
-        return;
-      }
+    if (!isSupabaseConfigured()) {
+      setError("Password reset requires a connected Supabase project.");
+      return;
     }
 
-    setForgotSent(true);
-    setTimeout(() => {
-      setForgotSent(false);
-      setForgotOpen(false);
-      setForgotEmail("");
-      setError("Password reset instructions sent to your email.");
-    }, 2000);
+    try {
+      await supabaseResetPassword(forgotEmail.trim());
+      setForgotSent(true);
+      setTimeout(() => {
+        setForgotSent(false);
+        setForgotOpen(false);
+        setForgotEmail("");
+        setSuccessNotice("Password reset email sent from Supabase!");
+      }, 2000);
+    } catch (err) {
+      setError(err.message || "Failed to send reset link.");
+    }
   }
 
   const content = (
@@ -651,6 +574,31 @@ export default function AuthModal({
           </p>
         </form>
       )}
+
+      {/* Clearly separated Demo Guest Mode for testing without passwords */}
+      <div className="auth-demo-section" style={{ marginTop: "1rem", paddingTop: "0.75rem", borderTop: "1px dashed var(--border-color, #e0d8cc)" }}>
+        <p style={{ fontSize: "0.8rem", color: "var(--text-muted, #777)", textAlign: "center", marginBottom: "0.5rem" }}>
+          — Or explore storefront as a Demo Guest (Read-Only Preview) —
+        </p>
+        <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="secondary-btn"
+            style={{ fontSize: "0.78rem", padding: "0.35rem 0.75rem" }}
+            onClick={() => handleDemoLogin(0)}
+          >
+            👤 Guest: Sarah (Indiranagar)
+          </button>
+          <button
+            type="button"
+            className="secondary-btn"
+            style={{ fontSize: "0.78rem", padding: "0.35rem 0.75rem" }}
+            onClick={() => handleDemoLogin(1)}
+          >
+            👤 Guest: Alex (Bandra)
+          </button>
+        </div>
+      </div>
 
       {/* Forgot Password Modal Dialog */}
       {forgotOpen && (

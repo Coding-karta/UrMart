@@ -94,6 +94,90 @@ export function clearSupabaseConfig() {
   return initSupabaseClient();
 }
 
+/**
+ * Real connectivity probe against Supabase endpoint
+ * Tests whether project URL and anon key are valid and reachable.
+ */
+export async function testSupabaseConnection(url, anonKey) {
+  const cleanUrl = clean(url);
+  const cleanKey = clean(anonKey);
+
+  if (!cleanUrl.startsWith("https://") || !cleanUrl.includes(".supabase.co")) {
+    return {
+      ok: false,
+      status: "invalid_url",
+      message: "Invalid Supabase Project URL format. Must start with https:// and contain .supabase.co"
+    };
+  }
+  if (cleanKey.length < 20 || cleanKey.includes("your-anon-key")) {
+    return {
+      ok: false,
+      status: "invalid_key",
+      message: "Invalid Anon API Key format. Provide your project's public anon key."
+    };
+  }
+
+  try {
+    const probeClient = createClient(cleanUrl, cleanKey, {
+      auth: { persistSession: false, autoRefreshToken: false }
+    });
+
+    // Probe PostgreSQL via REST API
+    const { error } = await probeClient.from("profiles").select("id").limit(1);
+
+    if (error) {
+      // PGRST205 or relation missing means Supabase project responded, but schema SQL needs to be run
+      if (
+        error.code === "PGRST205" ||
+        error.message?.includes("does not exist") ||
+        error.message?.includes("relation")
+      ) {
+        return {
+          ok: true,
+          status: "schema_pending",
+          message: "✓ Connected to Supabase Project! Remember to run the SQL schema in SQL Editor."
+        };
+      }
+
+      // Permission denied (42501) with anon means RLS is actively protecting the table
+      if (error.code === "42501" || error.message?.includes("permission denied")) {
+        return {
+          ok: true,
+          status: "connected",
+          message: "✓ Connected to Supabase Project! Row Level Security is active."
+        };
+      }
+
+      return {
+        ok: false,
+        status: "error",
+        message: `Supabase returned an error: ${error.message}`
+      };
+    }
+
+    return {
+      ok: true,
+      status: "connected",
+      message: "✓ Connected to Supabase Project and database successfully!"
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      status: "network_error",
+      message: err.message || "Network error: Unable to reach the Supabase endpoint."
+    };
+  }
+}
+
+// Clean up any legacy plaintext passwords stored in previous versions
+try {
+  if (typeof window !== "undefined" && window.localStorage) {
+    window.localStorage.removeItem("urmart-registered-users");
+  }
+} catch {
+  // ignore
+}
+
 /* ========================================================
    AUTHENTICATION HELPERS
    ======================================================== */
@@ -221,6 +305,14 @@ export async function supabaseFetchProfile(userId) {
   if (!client || !userId) return null;
 
   try {
+    // Verify session user to prevent ID manipulation
+    const { data: sessionData } = await client.auth.getSession();
+    const activeUserId = sessionData?.session?.user?.id;
+    if (activeUserId && activeUserId !== userId) {
+      console.warn("Security guard: cannot fetch profile for another user ID");
+      return null;
+    }
+
     const { data, error } = await client
       .from("profiles")
       .select("*")
@@ -239,19 +331,31 @@ export async function supabaseFetchProfile(userId) {
 }
 
 /**
- * Update profile row in public.profiles
+ * Update profile row in public.profiles (guarded by session)
  */
 export async function supabaseUpdateProfile(userId, updates) {
   const client = getSupabase();
   if (!client || !userId) return null;
 
   try {
+    const { data: sessionData } = await client.auth.getSession();
+    const activeUserId = sessionData?.session?.user?.id;
+    if (activeUserId && activeUserId !== userId) {
+      throw new Error("Unauthorized: Cannot update profile for another user ID.");
+    }
+
+    // Prevent updating privileged fields via client
+    const safeUpdates = { ...updates };
+    delete safeUpdates.id;
+    delete safeUpdates.email;
+    delete safeUpdates.created_at;
+
     const { data, error } = await client
       .from("profiles")
       .upsert(
         {
           id: userId,
-          ...updates,
+          ...safeUpdates,
           updated_at: new Date().toISOString()
         },
         { onConflict: "id" }
@@ -268,13 +372,20 @@ export async function supabaseUpdateProfile(userId, updates) {
 }
 
 /**
- * Fetch all orders for a user from public.orders
+ * Fetch all orders for a user from public.orders (guarded by session)
  */
 export async function supabaseFetchOrders(userId) {
   const client = getSupabase();
   if (!client || !userId) return [];
 
   try {
+    const { data: sessionData } = await client.auth.getSession();
+    const activeUserId = sessionData?.session?.user?.id;
+    if (activeUserId && activeUserId !== userId) {
+      console.warn("Security guard: cannot fetch orders for another user ID");
+      return [];
+    }
+
     const { data, error } = await client
       .from("orders")
       .select("*")
@@ -293,25 +404,40 @@ export async function supabaseFetchOrders(userId) {
 }
 
 /**
- * Save new order to public.orders
+ * Save new order to public.orders (guarded by session and returns result status)
  */
 export async function supabaseCreateOrder(order) {
   const client = getSupabase();
-  if (!client) return null;
+  if (!client) {
+    return { data: null, error: new Error("Supabase is not configured.") };
+  }
 
   try {
+    const { data: sessionData } = await client.auth.getSession();
+    const activeUser = sessionData?.session?.user;
+
+    if (!activeUser) {
+      return {
+        data: null,
+        error: new Error("Authentication required: You must be signed in to save orders to Supabase.")
+      };
+    }
+
+    // Server-enforced user_id from verified session token
+    const verifiedUserId = activeUser.id;
+
     const payload = {
       id: order.id,
-      user_id: order.userId || order.user_id,
+      user_id: verifiedUserId,
       items: order.items,
-      subtotal: order.subtotal,
-      discount: order.discount || 0,
-      shipping: order.shipping || 0,
-      total: order.total,
+      subtotal: Math.max(0, Number(order.subtotal) || 0),
+      discount: Math.max(0, Number(order.discount) || 0),
+      shipping: Math.max(0, Number(order.shipping) || 0),
+      total: Math.max(0, Number(order.total) || 0),
       coupon_code: order.couponCode || order.coupon_code || null,
-      shipping_address: order.shippingAddress || order.shipping_address,
-      payment_method: order.paymentMethod || order.payment_method || "UPI",
-      status: order.status || "Processing",
+      shipping_address: order.shippingAddress || order.shipping_address || {},
+      payment_method: order.paymentMethod || order.payment_method || "UPI (Simulated Demo)",
+      status: order.status || "Confirmed",
       created_at: order.createdAt || new Date().toISOString()
     };
 
@@ -322,12 +448,12 @@ export async function supabaseCreateOrder(order) {
       .maybeSingle();
 
     if (error) {
-      console.warn("Supabase createOrder note (table might not exist yet):", error.message);
-      return null;
+      console.warn("Supabase createOrder error from database:", error.message);
+      return { data: null, error };
     }
-    return data;
+    return { data, error: null };
   } catch (err) {
-    console.warn("Supabase createOrder error:", err);
-    return null;
+    console.warn("Supabase createOrder catch error:", err);
+    return { data: null, error: err };
   }
 }

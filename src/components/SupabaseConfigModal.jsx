@@ -3,7 +3,8 @@ import {
   getSupabaseConfig,
   saveSupabaseConfig,
   clearSupabaseConfig,
-  isSupabaseConfigured
+  isSupabaseConfigured,
+  testSupabaseConnection
 } from "../lib/supabase";
 
 export default function SupabaseConfigModal({ isOpen, onClose, onConfigSaved }) {
@@ -34,31 +35,45 @@ create table if not exists public.orders (
   id text primary key,
   user_id uuid references auth.users on delete cascade not null,
   items jsonb not null default '[]'::jsonb,
-  subtotal numeric not null default 0,
-  discount numeric not null default 0,
-  shipping numeric not null default 0,
-  total numeric not null default 0,
+  subtotal numeric not null default 0 check (subtotal >= 0),
+  discount numeric not null default 0 check (discount >= 0),
+  shipping numeric not null default 0 check (shipping >= 0),
+  total numeric not null default 0 check (total >= 0),
   coupon_code text,
   shipping_address jsonb not null default '{}'::jsonb,
-  payment_method text not null default 'UPI',
-  status text not null default 'Processing',
+  payment_method text not null default 'UPI (Simulated Demo)',
+  status text not null default 'Confirmed',
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
 alter table public.profiles enable row level security;
 alter table public.orders enable row level security;
 
+drop policy if exists "Users can view own profile" on public.profiles;
 create policy "Users can view own profile" on public.profiles for select using (auth.uid() = id);
+
+drop policy if exists "Users can update own profile" on public.profiles;
 create policy "Users can update own profile" on public.profiles for update using (auth.uid() = id);
+
+drop policy if exists "Users can insert own profile" on public.profiles;
 create policy "Users can insert own profile" on public.profiles for insert with check (auth.uid() = id);
+
+drop policy if exists "Users can view own orders" on public.orders;
 create policy "Users can view own orders" on public.orders for select using (auth.uid() = user_id);
+
+drop policy if exists "Users can insert own orders" on public.orders;
 create policy "Users can insert own orders" on public.orders for insert with check (auth.uid() = user_id);
 
+-- Least privilege SQL grants
 grant usage on schema public to anon, authenticated;
-grant all on table public.profiles to anon, authenticated, service_role;
-grant all on table public.orders to anon, authenticated, service_role;`;
+revoke all on table public.profiles from anon;
+revoke all on table public.orders from anon;
+grant select, insert, update on table public.profiles to authenticated;
+grant select, insert on table public.orders to authenticated;
+grant all on table public.profiles to service_role;
+grant all on table public.orders to service_role;`;
 
-  function handleSave(e) {
+  async function handleSave(e) {
     e.preventDefault();
     setNotice("");
     if (!url.trim() || !anonKey.trim()) {
@@ -66,21 +81,20 @@ grant all on table public.orders to anon, authenticated, service_role;`;
       return;
     }
 
-    if (!url.startsWith("https://") || !url.includes("supabase.co")) {
-      setNotice("Invalid Supabase URL format. It should look like: https://xyz.supabase.co");
-      return;
-    }
-
     setIsTesting(true);
-    setTimeout(() => {
+    const probe = await testSupabaseConnection(url, anonKey);
+    setIsTesting(false);
+
+    if (probe.ok) {
       saveSupabaseConfig(url, anonKey);
-      setIsTesting(false);
-      setNotice("✓ Supabase connected successfully! Database & Auth are now active.");
+      setNotice(probe.message);
       if (onConfigSaved) onConfigSaved();
       setTimeout(() => {
         if (onClose) onClose();
-      }, 1200);
-    }, 400);
+      }, 1500);
+    } else {
+      setNotice(`❌ Connection failed: ${probe.message}`);
+    }
   }
 
   function handleClear() {

@@ -21,42 +21,48 @@ export default function UserProfile({
       pincode: "560038"
     }
   );
-  const [addressSavedNotice, setAddressSavedNotice] = useState(false);
+  const [addressError, setAddressError] = useState("");
 
   if (!user) return null;
 
   async function handleSaveAddress(e) {
     e.preventDefault();
+    setAddressError("");
+
+    // Validate address fields
+    const street = (address.street || "").trim();
+    const city = (address.city || "").trim();
+    const state = (address.state || "").trim();
+    const pincode = (address.pincode || "").trim();
+
+    if (!street || !city || !state || !pincode) {
+      setAddressError("Please fill out all address fields.");
+      return;
+    }
+
+    if (!/^[1-9][0-9]{5}$/.test(pincode)) {
+      setAddressError("Please enter a valid 6-digit Indian PIN code (e.g. 560038).");
+      return;
+    }
+
+    const cleanAddress = { street, city, state, pincode };
+    setAddress(cleanAddress);
     setEditingAddress(false);
     setAddressSavedNotice(true);
     setTimeout(() => setAddressSavedNotice(false), 2500);
 
-    const updatedUser = { ...user, address };
+    const updatedUser = { ...user, address: cleanAddress };
     if (onUpdateUser) onUpdateUser(updatedUser);
 
     // Save to Supabase if active
-    if (isSupabaseConfigured() && user.id) {
+    if (isSupabaseConfigured() && user.id && !user.isDemo) {
       try {
         await supabaseUpdateProfile(user.id, {
-          addresses: [address]
+          addresses: [cleanAddress]
         });
       } catch (err) {
         console.warn("Could not save address to Supabase:", err);
       }
-    }
-
-    // Save back to stored registered users
-    try {
-      const stored = localStorage.getItem("urmart-registered-users");
-      if (stored) {
-        const users = JSON.parse(stored);
-        const updated = users.map((u) =>
-          u.id === user.id ? { ...u, address } : u
-        );
-        localStorage.setItem("urmart-registered-users", JSON.stringify(updated));
-      }
-    } catch {
-      // ignore
     }
   }
 
@@ -279,6 +285,12 @@ export default function UserProfile({
               </div>
             ) : (
               <form className="address-edit-form" onSubmit={handleSaveAddress}>
+                {addressError && (
+                  <div className="auth-error-banner" role="alert" style={{ marginBottom: "1rem" }}>
+                    <span>⚠️</span>
+                    <p>{addressError}</p>
+                  </div>
+                )}
                 <div className="auth-field">
                   <label>Street Address</label>
                   <input
