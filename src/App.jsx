@@ -396,8 +396,8 @@ function App() {
       paymentMethod === "upi"
         ? "UPI (Simulated Demo Payment)"
         : paymentMethod === "card"
-        ? "Credit/Debit Card (Simulated Demo Payment)"
-        : "Cash on Delivery (Demo Order)";
+          ? "Credit/Debit Card (Simulated Demo Payment)"
+          : "Cash on Delivery (Demo Order)";
 
     const newOrder = {
       orderId,
@@ -846,10 +846,10 @@ function App() {
                 {wishlistOnly
                   ? "Your Wishlist"
                   : query
-                  ? `Search: "${query}"`
-                  : category === "All"
-                  ? "Complete Collection"
-                  : `${category} Collection`}
+                    ? `Search: "${query}"`
+                    : category === "All"
+                      ? "Complete Collection"
+                      : `${category} Collection`}
               </h2>
 
               <p>{visibleProducts.length} curated objects to discover</p>
@@ -891,9 +891,8 @@ function App() {
                   </button>
 
                   <button
-                    className={`heart-button ${
-                      wishlist.includes(product.id) ? "hearted" : ""
-                    }`}
+                    className={`heart-button ${wishlist.includes(product.id) ? "hearted" : ""
+                      }`}
                     onClick={() => toggleWishlist(product.id)}
                     aria-label="Toggle wishlist"
                   >

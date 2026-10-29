@@ -36,10 +36,8 @@ export default function ChatAssistant({
 
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [geminiApiKey, setGeminiApiKey] = useState(() => {
-    return localStorage.getItem("urmart-gemini-key") || "";
-  });
-  const [showSettings, setShowSettings] = useState(false);
+  // API key loaded from env variable — never exposed to customers
+  const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY || "";
   const [addedItemNotice, setAddedItemNotice] = useState(null);
 
   const messagesEndRef = useRef(null);
@@ -68,11 +66,6 @@ export default function ChatAssistant({
       handleUserSubmitRef.current?.(initialQuery);
     }
   }, [initialQuery, isOpen]);
-
-  function saveGeminiKey(key) {
-    setGeminiApiKey(key);
-    localStorage.setItem("urmart-gemini-key", key);
-  }
 
   // Clear chat history
   function handleClearChat() {
@@ -300,35 +293,47 @@ export default function ChatAssistant({
     const cleanKey = (apiKey || "").trim();
     if (!cleanKey) throw new Error("No Gemini API key provided");
 
-    const sanitizedPrompt = (userPrompt || "").slice(0, 500).trim();
+    const sanitizedPrompt = (userPrompt || "").slice(0, 300).trim();
 
-    const systemPrompt = `You are UrMart AI, an elegant, friendly, and knowledgeable e-commerce shopping assistant for UrMart, a curated lifestyle store.
-Store Catalog Categories: Home Decor, Lighting, Kitchen, Workspace, Wellness, Travel.
-Current User: ${currentUser ? currentUser.name : "Guest"}.
-Cart items count: ${cartCount}. Subtotal: ${money(subtotal)}.
-Coupons available: WELCOME10 (10% off), URMART20 (20% off), FREESHIP (Free express delivery).
-Keep responses warm, concise, helpful, and beautifully styled with bullet points where appropriate.`;
+    const systemPrompt = `You are UrMart AI, a friendly shopping assistant. Categories: Home Decor, Lighting, Kitchen, Workspace, Wellness, Travel. User: ${currentUser ? currentUser.name : "Guest"}. Cart: ${cartCount} items (${money(subtotal)}). Coupons: WELCOME10, URMART20, FREESHIP. Be concise and helpful.`;
 
-    // Secure endpoint: do NOT append ?key= in the query URL
-    const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": cleanKey
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: `${systemPrompt}\n\nUser Question: ${sanitizedPrompt}` }]
+    // gemini-3.5-flash-lite — fastest, lowest latency model on free tier
+    const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent";
+
+    // Abort after 10 seconds so it never hangs forever
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    let res;
+    try {
+      res = await fetch(endpoint, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": cleanKey
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: `${systemPrompt}\n\nUser: ${sanitizedPrompt}` }]
+            }
+          ],
+          generationConfig: {
+            maxOutputTokens: 256,   // keep replies short & fast
+            temperature: 0.7
           }
-        ]
-      })
-    });
+        })
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!res.ok) {
-      throw new Error(`Gemini API error (Status ${res.status})`);
+      const errData = await res.json().catch(() => ({}));
+      const errMsg = errData?.error?.message || `HTTP ${res.status}`;
+      throw new Error(`Gemini API error: ${errMsg}`);
     }
     const data = await res.json();
     return data.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -373,7 +378,7 @@ Keep responses warm, concise, helpful, and beautifully styled with bullet points
               from: "bot",
               text: geminiResponse,
               engine: "gemini",
-              engineLabel: "⚡ Gemini 1.5 Flash AI",
+              engineLabel: "⚡ Gemini 3.5 Flash Lite",
               time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
               suggestions: ["✨ Best sellers", "🎁 Gifts under ₹1000", "🛒 My Cart"]
             }
@@ -381,7 +386,22 @@ Keep responses warm, concise, helpful, and beautifully styled with bullet points
           return;
         }
       } catch (err) {
-        console.warn("Gemini API call failed, falling back to smart catalog engine", err);
+        console.error("Gemini API error:", err.message);
+        // Show the actual error in chat so user knows what went wrong
+        setIsTyping(false);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `bot_err_${Date.now()}`,
+            from: "bot",
+            text: `⚠️ **Gemini AI unavailable:** ${err.message}\n\nFalling back to built-in catalog engine.`,
+            engine: "error",
+            engineLabel: "UrMart Curated Engine (Gemini error)",
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            suggestions: ["✨ Best sellers", "🏷️ Discount codes", "📦 Track my order"]
+          }
+        ]);
+        return;
       }
     }
 
@@ -453,15 +473,6 @@ Keep responses warm, concise, helpful, and beautifully styled with bullet points
           <button
             type="button"
             className="chat-action-icon-btn"
-            onClick={() => setShowSettings(!showSettings)}
-            title="AI Engine Settings"
-            aria-label="AI Settings"
-          >
-            ⚙️
-          </button>
-          <button
-            type="button"
-            className="chat-action-icon-btn"
             onClick={handleClearChat}
             title="Clear Chat History"
             aria-label="Clear chat"
@@ -478,30 +489,6 @@ Keep responses warm, concise, helpful, and beautifully styled with bullet points
           </button>
         </div>
       </div>
-
-      {/* OPTIONAL GEMINI SETTINGS DRAWER */}
-      {showSettings && (
-        <div className="chat-settings-drawer">
-          <div className="settings-drawer-header">
-            <strong>🤖 AI Configuration</strong>
-            <button onClick={() => setShowSettings(false)}>×</button>
-          </div>
-          <p>
-            By default, UrMart's built-in intelligent e-commerce engine powers all recommendations, cart actions, tracking, and FAQs offline.
-          </p>
-          <div className="settings-field">
-            <label htmlFor="gemini-key-input">Optional: Google Gemini API Key</label>
-            <input
-              id="gemini-key-input"
-              type="password"
-              placeholder="AIzaSy..."
-              value={geminiApiKey}
-              onChange={(e) => saveGeminiKey(e.target.value)}
-            />
-            <small>Allows open-ended cloud AI generation if provided.</small>
-          </div>
-        </div>
-      )}
 
       {/* TOAST NOTICE INSIDE CHAT */}
       {addedItemNotice && (
