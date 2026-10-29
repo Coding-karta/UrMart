@@ -288,7 +288,7 @@ export default function ChatAssistant({
     };
   }
 
-  // Live Gemini API caller (Secure: API key sent via header, never in URL query string)
+  // Live Gemini API caller
   async function callGeminiAPI(userPrompt, apiKey) {
     const cleanKey = (apiKey || "").trim();
     if (!cleanKey) throw new Error("No Gemini API key provided");
@@ -297,10 +297,15 @@ export default function ChatAssistant({
 
     const systemPrompt = `You are UrMart AI, a friendly shopping assistant. Categories: Home Decor, Lighting, Kitchen, Workspace, Wellness, Travel. User: ${currentUser ? currentUser.name : "Guest"}. Cart: ${cartCount} items (${money(subtotal)}). Coupons: WELCOME10, URMART20, FREESHIP. Be concise and helpful.`;
 
-    // gemini-3.5-flash-lite — fastest, lowest latency model on free tier
     const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent";
 
-    // Abort after 10 seconds so it never hangs forever
+    // AQ. prefix = OAuth2 token → use Bearer auth; AIzaSy = API key → use x-goog-api-key
+    const isOAuthToken = cleanKey.startsWith("AQ.") || cleanKey.startsWith("ya29.");
+    const authHeaders = isOAuthToken
+      ? { "Authorization": `Bearer ${cleanKey}` }
+      : { "x-goog-api-key": cleanKey };
+
+    // Abort after 10 seconds
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
 
@@ -311,7 +316,7 @@ export default function ChatAssistant({
         signal: controller.signal,
         headers: {
           "Content-Type": "application/json",
-          "x-goog-api-key": cleanKey
+          ...authHeaders
         },
         body: JSON.stringify({
           contents: [
@@ -321,7 +326,7 @@ export default function ChatAssistant({
             }
           ],
           generationConfig: {
-            maxOutputTokens: 256,   // keep replies short & fast
+            maxOutputTokens: 256,
             temperature: 0.7
           }
         })
